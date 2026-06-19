@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package pos.auth.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/pos-stery/pos-stery/gen/go/pos/auth/v1;authv1";
+
+service AuthService {
+  rpc Login(LoginRequest) returns (LoginResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/login"
+      body: "*"
+    };
+  }
+
+  rpc Validate(ValidateRequest) returns (ValidateResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/validate"
+      body: "*"
+    };
+  }
+
+  rpc Logout(LogoutRequest) returns (LogoutResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/logout"
+      body: "*"
+    };
+  }
+}
+
+message LoginRequest {
+  string email    = 1;
+  string password = 2;
+  // store_id is required for cashier role; omit for admin login
+  string store_id = 3;
+}
+
+message LoginResponse {
+  string                    token      = 1;
+  google.protobuf.Timestamp expires_at = 2;
+  UserClaims                claims     = 3;
+}
+
+message ValidateRequest {
+  string token = 1;
+}
+
+message ValidateResponse {
+  bool       valid  = 1;
+  UserClaims claims = 2;
+}
+
+message LogoutRequest {
+  string token = 1;
+}
+
+message LogoutResponse {
+  bool success = 1;
+}
+
+message UserClaims {
+  string user_id   = 1;
+  string tenant_id = 2;
+  string store_id  = 3;
+  string role      = 4;
+  string email     = 5;
+}

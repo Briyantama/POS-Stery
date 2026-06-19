@@ -1,0 +1,106 @@
+syntax = "proto3";
+
+package pos.sales.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/pos-stery/pos-stery/gen/go/pos/sales/v1;salesv1";
+
+service SalesService {
+  rpc CreateSale(CreateSaleRequest) returns (CreateSaleResponse) {
+    option (google.api.http) = {
+      post: "/v1/sales"
+      body: "*"
+    };
+  }
+
+  rpc GetSale(GetSaleRequest) returns (GetSaleResponse) {
+    option (google.api.http) = {
+      get: "/v1/sales/{sale_id}"
+    };
+  }
+
+  rpc GetSalesReport(GetSalesReportRequest) returns (GetSalesReportResponse) {
+    option (google.api.http) = {
+      get: "/v1/sales/report"
+    };
+  }
+}
+
+message CreateSaleRequest {
+  string            tenant_id       = 1;
+  string            store_id        = 2;
+  string            cashier_id      = 3;
+  string            customer_id     = 4; // optional
+  repeated SaleItem items           = 5;
+  double            discount_amount = 6;
+  string            notes           = 7;
+}
+
+message CreateSaleResponse {
+  Sale    sale    = 1;
+  Receipt receipt = 2;
+}
+
+message GetSaleRequest {
+  string tenant_id = 1;
+  string store_id  = 2;
+  string sale_id   = 3;
+}
+
+message GetSaleResponse {
+  Sale    sale    = 1;
+  Receipt receipt = 2;
+}
+
+message GetSalesReportRequest {
+  string tenant_id = 1;
+  string store_id  = 2; // empty = all stores (admin only)
+  string date      = 3; // YYYY-MM-DD
+}
+
+message GetSalesReportResponse {
+  string                    date              = 1;
+  string                    store_id          = 2;
+  double                    total_revenue     = 3;
+  int32                     transaction_count = 4;
+  repeated TopProduct       top_products      = 5;
+}
+
+message SaleItem {
+  string product_id  = 1;
+  int32  quantity    = 2;
+  double unit_price  = 3;
+  double discount    = 4;
+}
+
+message Sale {
+  string                    sale_id         = 1;
+  string                    tenant_id       = 2;
+  string                    store_id        = 3;
+  string                    cashier_id      = 4;
+  string                    customer_id     = 5;
+  repeated SaleItem         items           = 6;
+  double                    subtotal        = 7;
+  double                    discount_amount = 8;
+  double                    total           = 9;
+  string                    status          = 10;
+  google.protobuf.Timestamp completed_at    = 11;
+}
+
+message Receipt {
+  string                    receipt_id  = 1;
+  string                    sale_id     = 2;
+  string                    tenant_id   = 3;
+  string                    store_id    = 4;
+  bytes                     snapshot    = 5; // JSON snapshot of the sale
+  google.protobuf.Timestamp issued_at   = 6;
+}
+
+message TopProduct {
+  string product_id   = 1;
+  string product_name = 2;
+  int32  units_sold   = 3;
+  double revenue      = 4;
+}

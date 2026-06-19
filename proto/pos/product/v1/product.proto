@@ -1,0 +1,106 @@
+syntax = "proto3";
+
+package pos.product.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/pos-stery/pos-stery/gen/go/pos/product/v1;productv1";
+
+service ProductService {
+  rpc CreateProduct(CreateProductRequest) returns (CreateProductResponse) {
+    option (google.api.http) = {
+      post: "/v1/products"
+      body: "*"
+    };
+  }
+
+  rpc UpdateProduct(UpdateProductRequest) returns (UpdateProductResponse) {
+    option (google.api.http) = {
+      put: "/v1/products/{product_id}"
+      body: "*"
+    };
+  }
+
+  rpc GetProduct(GetProductRequest) returns (GetProductResponse) {
+    option (google.api.http) = {
+      get: "/v1/products/{product_id}"
+    };
+  }
+
+  rpc SearchProducts(SearchProductsRequest) returns (SearchProductsResponse) {
+    option (google.api.http) = {
+      get: "/v1/products"
+    };
+  }
+}
+
+message CreateProductRequest {
+  string tenant_id   = 1;
+  string name        = 2;
+  string sku         = 3;
+  string barcode     = 4;
+  string category_id = 5;
+  double base_price  = 6;
+  string description = 7;
+  string unit        = 8;
+}
+
+message CreateProductResponse {
+  Product product = 1;
+}
+
+message UpdateProductRequest {
+  string tenant_id   = 1;
+  string product_id  = 2;
+  string name        = 3;
+  string barcode     = 4;
+  string category_id = 5;
+  double base_price  = 6;
+  double sale_price  = 7;
+  string description = 8;
+  bool   is_active   = 9;
+}
+
+message UpdateProductResponse {
+  Product product = 1;
+}
+
+message GetProductRequest {
+  string tenant_id  = 1;
+  string product_id = 2;
+}
+
+message GetProductResponse {
+  Product product = 1;
+}
+
+message SearchProductsRequest {
+  string tenant_id = 1;
+  string query     = 2;
+  string category  = 3;
+  int32  limit     = 4;
+  int32  offset    = 5;
+}
+
+message SearchProductsResponse {
+  repeated Product products = 1;
+  int32            total    = 2;
+}
+
+message Product {
+  string                    product_id   = 1;
+  string                    tenant_id    = 2;
+  string                    name         = 3;
+  string                    sku          = 4;
+  string                    barcode      = 5;
+  string                    category_id  = 6;
+  string                    category     = 7;
+  double                    base_price   = 8;
+  double                    sale_price   = 9;
+  string                    description  = 10;
+  string                    unit         = 11;
+  bool                      is_active    = 12;
+  google.protobuf.Timestamp created_at   = 13;
+  google.protobuf.Timestamp updated_at   = 14;
+}

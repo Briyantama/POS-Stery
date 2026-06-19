@@ -1,0 +1,70 @@
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+bin/
+dist/
+
+# Generated proto output — never commit
+gen/go/
+gen/openapi/
+
+# Build artifacts
+*.pb.go
+*_grpc.pb.go
+*.pb.gw.go
+
+# PHP / Composer
+apps/api-gateway/vendor/
+apps/api-gateway/node_modules/
+
+# Node / SvelteKit
+node_modules/
+.svelte-kit/
+build/
+.output/
+.vercel/
+apps/admin/.svelte-kit/
+apps/admin/build/
+apps/cashier/.svelte-kit/
+apps/cashier/build/
+packages/ui/.svelte-kit/
+
+# pnpm
+.pnpm-store/
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.env
+
+# JWT keys
+keys/
+*.pem
+*.key
+
+# IDE
+.idea/
+.vscode/settings.json
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Test output
+coverage/
+*.coverprofile
+.nyc_output/
+
+# Logs
+*.log
+logs/
+
+# Docker
+.docker/

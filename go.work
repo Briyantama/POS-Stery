@@ -1,0 +1,12 @@
+go 1.24.0
+
+use (
+	./gen/go
+	./services/_shared
+	./services/auth-service
+	./services/customer-service
+	./services/inventory-service
+	./services/product-service
+	./services/sales-service
+	./services/supplier-service
+)

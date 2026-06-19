@@ -1,0 +1,123 @@
+syntax = "proto3";
+
+package pos.inventory.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/pos-stery/pos-stery/gen/go/pos/inventory/v1;inventoryv1";
+
+service InventoryService {
+  rpc AddItem(AddItemRequest) returns (AddItemResponse) {
+    option (google.api.http) = {
+      post: "/v1/inventory"
+      body: "*"
+    };
+  }
+
+  // UpdateStock adjusts quantity by delta (positive = add, negative = deduct).
+  // Returns ErrStockWouldGoNegative if result < 0.
+  rpc UpdateStock(UpdateStockRequest) returns (UpdateStockResponse) {
+    option (google.api.http) = {
+      patch: "/v1/inventory/{product_id}/stock"
+      body: "*"
+    };
+  }
+
+  rpc ListItems(ListItemsRequest) returns (ListItemsResponse) {
+    option (google.api.http) = {
+      get: "/v1/inventory"
+    };
+  }
+
+  rpc GetItem(GetItemRequest) returns (GetItemResponse) {
+    option (google.api.http) = {
+      get: "/v1/inventory/{product_id}"
+    };
+  }
+
+  rpc SetThreshold(SetThresholdRequest) returns (SetThresholdResponse) {
+    option (google.api.http) = {
+      put: "/v1/inventory/{product_id}/threshold"
+      body: "*"
+    };
+  }
+}
+
+enum StockUpdateReason {
+  STOCK_UPDATE_REASON_UNSPECIFIED = 0;
+  STOCK_UPDATE_REASON_SALE        = 1;
+  STOCK_UPDATE_REASON_RECEIPT     = 2;
+  STOCK_UPDATE_REASON_ADJUSTMENT  = 3;
+}
+
+message AddItemRequest {
+  string tenant_id    = 1;
+  string store_id     = 2;
+  string product_id   = 3;
+  int64  quantity     = 4;
+  int64  min_quantity = 5; // low-stock threshold; defaults to 0 if omitted
+}
+
+message AddItemResponse {
+  StockItem item = 1;
+}
+
+message UpdateStockRequest {
+  string            tenant_id      = 1;
+  string            store_id       = 2;
+  string            product_id     = 3;
+  int64             quantity_delta = 4; // negative for deductions
+  StockUpdateReason reason         = 5;
+  string            reference_id   = 6; // sale_id, purchase_order_id, etc.
+}
+
+message UpdateStockResponse {
+  StockItem item             = 1;
+  bool      low_stock_alert  = 2;
+}
+
+message ListItemsRequest {
+  string tenant_id    = 1;
+  string store_id     = 2;
+  bool   low_stock_only = 3;
+  int32  limit        = 4;
+  int32  offset       = 5;
+}
+
+message ListItemsResponse {
+  repeated StockItem items = 1;
+  int32              total = 2;
+}
+
+message GetItemRequest {
+  string tenant_id  = 1;
+  string store_id   = 2;
+  string product_id = 3;
+}
+
+message GetItemResponse {
+  StockItem item = 1;
+}
+
+message SetThresholdRequest {
+  string tenant_id    = 1;
+  string store_id     = 2;
+  string product_id   = 3;
+  int64  min_quantity = 4;
+}
+
+message SetThresholdResponse {
+  StockItem item = 1;
+}
+
+message StockItem {
+  string                    item_id       = 1;
+  string                    tenant_id     = 2;
+  string                    store_id      = 3;
+  string                    product_id    = 4;
+  int64                     quantity      = 5;
+  int64                     min_quantity  = 6;
+  bool                      is_low_stock  = 7;
+  google.protobuf.Timestamp updated_at    = 8;
+}

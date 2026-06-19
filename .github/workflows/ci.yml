@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  proto-lint:
+    name: Proto lint & breaking check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          version: '1.34.0'
+
+      - name: Lint proto files
+        run: buf lint
+        working-directory: proto
+
+      - name: Check for breaking changes
+        run: buf breaking --against '.git#branch=main'
+        working-directory: proto
+        if: github.event_name == 'pull_request'
+
+  go-build:
+    name: Go build & test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: pos_db
+          POSTGRES_USER: pos_admin
+          POSTGRES_PASSWORD: pos_admin_secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Build all services
+        run: make build-go
+
+      - name: Vet all services
+        run: make lint-go
+
+      - name: Unit tests
+        run: make test-go
+        env:
+          DATABASE_URL: postgres://pos_admin:pos_admin_secret@localhost:5432/pos_db?sslmode=disable
+
+  migrate-validate:
+    name: Migration file validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate up/down pairs
+        run: bash scripts/migrate-validate.sh
+
+  gateway-test:
+    name: Laravel gateway tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api-gateway
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, xml, curl, json, bcmath
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Run Pest tests
+        run: vendor/bin/pest --no-coverage
+
+  frontend-check:
+    name: Frontend type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Type-check admin
+        run: pnpm --filter @pos-stery/admin check
+
+      - name: Type-check cashier
+        run: pnpm --filter @pos-stery/cashier check

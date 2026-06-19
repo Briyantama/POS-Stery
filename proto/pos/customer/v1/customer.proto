@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package pos.customer.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/pos-stery/pos-stery/gen/go/pos/customer/v1;customerv1";
+
+service CustomerService {
+  rpc CreateCustomer(CreateCustomerRequest) returns (CreateCustomerResponse) {
+    option (google.api.http) = {
+      post: "/v1/customers"
+      body: "*"
+    };
+  }
+
+  rpc GetCustomer(GetCustomerRequest) returns (GetCustomerResponse) {
+    option (google.api.http) = {
+      get: "/v1/customers/{customer_id}"
+    };
+  }
+
+  rpc ListCustomers(ListCustomersRequest) returns (ListCustomersResponse) {
+    option (google.api.http) = {
+      get: "/v1/customers"
+    };
+  }
+
+  // AddLoyaltyPoints is called by sales-service after Sale.Completed event.
+  // Points are only added after a fully committed sale.
+  rpc AddLoyaltyPoints(AddLoyaltyPointsRequest) returns (AddLoyaltyPointsResponse) {
+    option (google.api.http) = {
+      post: "/v1/customers/{customer_id}/loyalty"
+      body: "*"
+    };
+  }
+}
+
+message CreateCustomerRequest {
+  string tenant_id = 1;
+  string name      = 2;
+  string phone     = 3;
+  string email     = 4;
+}
+
+message CreateCustomerResponse {
+  Customer customer = 1;
+}
+
+message GetCustomerRequest {
+  string tenant_id   = 1;
+  string customer_id = 2;
+}
+
+message GetCustomerResponse {
+  Customer customer = 1;
+}
+
+message ListCustomersRequest {
+  string tenant_id = 1;
+  string query     = 2;
+  int32  limit     = 3;
+  int32  offset    = 4;
+}
+
+message ListCustomersResponse {
+  repeated Customer customers = 1;
+  int32             total     = 2;
+}
+
+message AddLoyaltyPointsRequest {
+  string tenant_id   = 1;
+  string customer_id = 2;
+  string sale_id     = 3;
+  int32  points      = 4;
+}
+
+message AddLoyaltyPointsResponse {
+  Customer customer     = 1;
+  int32    total_points = 2;
+}
+
+message Customer {
+  string                    customer_id   = 1;
+  string                    tenant_id     = 2;
+  string                    name          = 3;
+  string                    phone         = 4;
+  string                    email         = 5;
+  int32                     loyalty_points = 6;
+  google.protobuf.Timestamp created_at    = 7;
+  google.protobuf.Timestamp updated_at    = 8;
+}
