@@ -53,16 +53,23 @@
 
 <style>
   .field { display: flex; flex-direction: column; gap: 0.25rem; }
-  .field__label { font-size: 0.875rem; font-weight: 500; color: var(--color-text, #0f172a); }
+  .field__label { font-size: var(--text-sm, 0.875rem); font-weight: var(--weight-medium, 500); color: var(--color-text, #1a1611); }
   .field__input {
     padding: 0.5rem 0.75rem;
-    border: 1px solid var(--color-border, #e2e8f0);
-    border-radius: 0.375rem;
-    font-size: 0.875rem;
-    transition: border-color 150ms;
+    border: 1px solid var(--color-border, #e2dbcd);
+    border-radius: var(--radius-md, 0.375rem);
+    font-size: var(--text-sm, 0.875rem);
+    font-family: var(--font-sans);
+    color: var(--color-text, #1a1611);
+    background: var(--color-surface, #fff);
+    transition: border-color 140ms;
     outline: none;
   }
-  .field__input:focus { border-color: var(--color-primary, #2563eb); box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
-  .field--error .field__input { border-color: var(--color-danger, #dc2626); }
-  .field__error { font-size: 0.75rem; color: var(--color-danger, #dc2626); margin: 0; }
+  .field__input::placeholder { color: var(--color-placeholder, #a89e8b); }
+  .field__input:focus {
+    border-color: var(--color-primary, #1b3b8f);
+    box-shadow: 0 0 0 3px var(--ring-color, rgb(27 59 143 / 0.18));
+  }
+  .field--error .field__input { border-color: var(--color-danger, #c0392b); }
+  .field__error { font-size: var(--text-xs, 0.75rem); color: var(--color-danger-fg, #8c2a20); margin: 0; }
 </style>
