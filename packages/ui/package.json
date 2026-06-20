@@ -7,7 +7,8 @@
       "types": "./dist/index.d.ts",
       "svelte": "./src/index.ts",
       "default": "./dist/index.js"
-    }
+    },
+    "./tokens.css": "./src/tokens.css"
   },
   "scripts": {
     "build": "svelte-package -i src",

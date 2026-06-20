@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { getToken } from '$lib/auth';
   import { api, ApiError } from '$lib/api';
-  import { Card, Table, Input } from '@pos-stery/ui';
+  import { Alert, Card, Input, PageHeader, Table } from '@pos-stery/ui';
 
   interface Customer { customer_id: string; name: string; phone: string; email: string; loyalty_points: number; }
 
@@ -28,15 +28,22 @@
 
 <svelte:head><title>Customers — POS-Stery Admin</title></svelte:head>
 
-<h1 class="page-title">Customers</h1>
+<PageHeader title="Customers" />
 
 <Card>
-  <div class="toolbar"><Input placeholder="Search customers…" bind:value={search} oninput={() => load()} /></div>
+  <div class="toolbar">
+    <Input placeholder="Search customers…" bind:value={search} oninput={() => load()} />
+  </div>
 
   {#if error}
-    <p class="error-msg" role="alert">{error}</p>
+    <Alert>{error}</Alert>
   {:else}
-    <Table headers={['Name', 'Phone', 'Email', 'Loyalty Points']} {loading}>
+    <Table
+      headers={['Name', 'Phone', 'Email', 'Loyalty Points']}
+      {loading}
+      isEmpty={customers.length === 0}
+      empty="No customers found."
+    >
       {#each customers as c (c.customer_id)}
         <tr>
           <td>{c.name}</td>
@@ -44,15 +51,11 @@
           <td>{c.email ?? '—'}</td>
           <td>{c.loyalty_points ?? 0}</td>
         </tr>
-      {:else}
-        {#if !loading}<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--color-muted)">No customers.</td></tr>{/if}
       {/each}
     </Table>
   {/if}
 </Card>
 
 <style>
-  .page-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; }
-  .toolbar    { margin-bottom: 1rem; max-width: 320px; }
-  .error-msg  { color: var(--color-danger); }
+  .toolbar { margin-bottom: var(--space-4, 1rem); max-width: 320px; }
 </style>

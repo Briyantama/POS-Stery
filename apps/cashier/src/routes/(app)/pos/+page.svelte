@@ -1,22 +1,22 @@
 <script lang="ts">
   import { getToken } from '$lib/session';
   import { api, ApiError } from '$lib/api';
-  import { Button, Input, Badge, Card, LoadingSpinner } from '@pos-stery/ui';
+  import { Alert, Button, Input, Badge, LoadingSpinner } from '@pos-stery/ui';
 
   interface Product { product_id: string; name: string; sku: string; sale_price: number; base_price: number; }
   interface CartItem extends Product { quantity: number; }
 
-  let searchQuery  = $state('');
+  let searchQuery   = $state('');
   let searchResults: Product[] = $state([]);
-  let searching    = $state(false);
+  let searching     = $state(false);
 
-  let cart: CartItem[] = $state([]);
-  let customerId   = $state('');
-  let discountAmount = $state(0);
+  let cart: CartItem[]  = $state([]);
+  let customerId        = $state('');
+  let discountAmount    = $state(0);
 
-  let submitting   = $state(false);
+  let submitting  = $state(false);
   let receipt: { sale_id: string; total_amount: number; items_count: number } | null = $state(null);
-  let saleError    = $state('');
+  let saleError   = $state('');
 
   async function searchProducts() {
     if (!searchQuery.trim()) { searchResults = []; return; }
@@ -74,11 +74,11 @@
         },
         getToken() ?? undefined,
       );
-      cart          = [];
+      cart           = [];
       discountAmount = 0;
-      customerId    = '';
+      customerId     = '';
     } catch (err) {
-      saleError = err instanceof ApiError ? err.message : 'Sale failed.';
+      saleError = err instanceof ApiError ? err.message : 'Sale failed. Please try again.';
     } finally {
       submitting = false;
     }
@@ -121,14 +121,17 @@
 
     {#if receipt}
       <div class="receipt-success" role="status">
-        <p>Sale completed!</p>
-        <p>Sale ID: <code>{receipt.sale_id}</code></p>
-        <p>Total: IDR {(receipt.total_amount ?? total).toLocaleString()}</p>
-        <Button onclick={() => (receipt = null)}>New Sale</Button>
+        <svg class="receipt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <p class="receipt-title">Sale Complete</p>
+        <p class="receipt-total">IDR {(receipt.total_amount ?? total).toLocaleString()}</p>
+        <p class="receipt-id">ID: <code>{receipt.sale_id}</code></p>
+        <Button onclick={() => (receipt = null)} size="lg">New Sale</Button>
       </div>
     {:else}
       {#if !cart.length}
-        <p class="cart-empty">No items added yet.</p>
+        <p class="cart-empty">Add items from the product list.</p>
       {:else}
         <ul class="cart-list" role="list">
           {#each cart as item (item.product_id)}
@@ -136,39 +139,46 @@
               <span class="cart-item__name">{item.name}</span>
               <div class="cart-item__controls">
                 <button class="qty-btn" onclick={() => updateQty(item.product_id, -1)} aria-label="Decrease quantity">−</button>
-                <span class="qty-val">{item.quantity}</span>
+                <span class="qty-val" aria-label="Quantity: {item.quantity}">{item.quantity}</span>
                 <button class="qty-btn" onclick={() => updateQty(item.product_id, +1)} aria-label="Increase quantity">+</button>
               </div>
               <span class="cart-item__price">IDR {((item.sale_price || item.base_price) * item.quantity).toLocaleString()}</span>
-              <button class="cart-item__remove" onclick={() => removeItem(item.product_id)} aria-label="Remove">✕</button>
+              <button class="cart-item__remove" onclick={() => removeItem(item.product_id)} aria-label="Remove {item.name}">✕</button>
             </li>
           {/each}
         </ul>
 
         <div class="cart-footer">
-          <div class="cart-field">
-            <label for="discount">Discount (IDR)</label>
-            <input id="discount" type="number" min="0" bind:value={discountAmount} />
-          </div>
-          <div class="cart-field">
-            <label for="customer">Customer ID (optional)</label>
-            <input id="customer" type="text" bind:value={customerId} placeholder="UUID" />
-          </div>
+          <Input
+            label="Discount (IDR)"
+            type="number"
+            bind:value={discountAmount as unknown as string}
+          />
+          <Input
+            label="Customer ID (optional)"
+            bind:value={customerId}
+            placeholder="UUID"
+          />
 
-          <div class="cart-total">
+          <div class="cart-total" aria-label="Order total">
             <span>Subtotal</span><span>IDR {subtotal.toLocaleString()}</span>
             {#if discountAmount > 0}
-              <span>Discount</span><span>- IDR {discountAmount.toLocaleString()}</span>
+              <span>Discount</span><span>− IDR {discountAmount.toLocaleString()}</span>
             {/if}
             <span class="cart-total__label">Total</span>
             <span class="cart-total__amount">IDR {total.toLocaleString()}</span>
           </div>
 
           {#if saleError}
-            <p class="error-msg" role="alert">{saleError}</p>
+            <Alert>{saleError}</Alert>
           {/if}
 
-          <Button onclick={submitSale} loading={submitting} disabled={submitting || !cart.length}>
+          <Button
+            size="lg"
+            onclick={submitSale}
+            loading={submitting}
+            disabled={submitting || !cart.length}
+          >
             Charge IDR {total.toLocaleString()}
           </Button>
         </div>
@@ -181,74 +191,99 @@
   .pos-layout {
     display: grid;
     grid-template-columns: 1fr 380px;
-    gap: 1.5rem;
-    height: calc(100vh - 100px);
+    gap: var(--space-6, 1.5rem);
+    height: calc(100dvh - 3.5rem);
+    min-height: 0;
   }
-  .panel-title { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; }
-  .search-wrap { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+
+  @media (max-width: 768px) {
+    .pos-layout {
+      grid-template-columns: 1fr;
+      height: auto;
+    }
+  }
+
+  .panel-title { font-size: var(--text-base, 1rem); font-weight: 600; margin-bottom: var(--space-4, 1rem); }
+  .search-wrap { display: flex; align-items: center; gap: var(--space-2, 0.5rem); margin-bottom: var(--space-3, 0.75rem); }
 
   .search-results {
     list-style: none; margin: 0; padding: 0;
-    border: 1px solid var(--color-border); border-radius: 0.5rem; overflow-y: auto; max-height: 400px;
+    border: 1px solid var(--color-border); border-radius: var(--radius-lg, 0.5rem);
+    overflow-y: auto; max-height: 400px;
   }
   .product-row {
-    display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; width: 100%;
+    display: flex; align-items: center; gap: var(--space-3, 0.75rem);
+    padding: 0.75rem 1rem; width: 100%;
     background: none; border: none; cursor: pointer; text-align: left;
     border-bottom: 1px solid var(--color-border);
+    transition: background 150ms;
   }
   .product-row:last-child { border-bottom: none; }
   .product-row:hover { background: var(--color-surface-hover); }
+  .product-row:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
   .product-row__name  { flex: 1; font-weight: 500; }
-  .product-row__sku   { color: var(--color-muted); font-size: 0.75rem; }
+  .product-row__sku   { color: var(--color-muted); font-size: var(--text-xs, 0.75rem); }
   .product-row__price { font-weight: 600; color: var(--color-primary); }
 
   .cart-panel {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: 0.5rem;
-    padding: 1.25rem;
+    border-radius: var(--radius-lg, 0.5rem);
+    padding: var(--space-5, 1.25rem);
     display: flex;
     flex-direction: column;
     overflow-y: auto;
+    min-height: 0;
   }
-  .cart-empty { color: var(--color-muted); text-align: center; padding: 2rem; }
+  .cart-empty { color: var(--color-muted); text-align: center; padding: var(--space-8, 2rem); margin: 0; }
 
   .cart-list { list-style: none; margin: 0; padding: 0; flex: 1; overflow-y: auto; }
   .cart-item {
-    display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0;
+    display: flex; align-items: center; gap: var(--space-2, 0.5rem);
+    padding: var(--space-2, 0.5rem) 0;
     border-bottom: 1px solid var(--color-border);
   }
-  .cart-item__name { flex: 1; font-size: 0.875rem; }
+  .cart-item:last-child { border-bottom: none; }
+  .cart-item__name { flex: 1; font-size: var(--text-sm, 0.875rem); }
   .cart-item__controls { display: flex; align-items: center; gap: 0.25rem; }
   .qty-btn {
-    width: 1.75rem; height: 1.75rem; border: 1px solid var(--color-border);
-    border-radius: 0.25rem; background: none; cursor: pointer; font-size: 1rem; line-height: 1;
+    width: 1.75rem; height: 1.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 0.25rem);
+    background: none; cursor: pointer; font-size: 1rem; line-height: 1;
+    transition: background 150ms;
   }
   .qty-btn:hover { background: var(--color-surface-hover); }
+  .qty-btn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
   .qty-val { width: 1.5rem; text-align: center; font-weight: 600; }
-  .cart-item__price { font-weight: 500; font-size: 0.875rem; white-space: nowrap; }
+  .cart-item__price { font-weight: 500; font-size: var(--text-sm, 0.875rem); white-space: nowrap; }
   .cart-item__remove {
-    background: none; border: none; color: var(--color-muted); cursor: pointer; font-size: 0.75rem; padding: 0.25rem;
+    background: none; border: none; color: var(--color-muted); cursor: pointer;
+    font-size: var(--text-xs, 0.75rem); padding: 0.25rem; border-radius: var(--radius-sm);
+    transition: color 150ms;
   }
   .cart-item__remove:hover { color: var(--color-danger); }
 
-  .cart-footer { margin-top: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
-  .cart-field  { display: flex; flex-direction: column; gap: 0.25rem; }
-  .cart-field label { font-size: 0.75rem; color: var(--color-muted); }
-  .cart-field input {
-    border: 1px solid var(--color-border); border-radius: 0.375rem; padding: 0.375rem 0.5rem; font-size: 0.875rem;
+  .cart-footer { margin-top: var(--space-4, 1rem); display: flex; flex-direction: column; gap: var(--space-3, 0.75rem); }
+
+  .cart-total {
+    display: grid; grid-template-columns: 1fr auto;
+    gap: 0.375rem var(--space-4, 1rem); font-size: var(--text-sm, 0.875rem);
+    padding: var(--space-3, 0.75rem) 0;
+    border-top: 1px solid var(--color-border);
   }
+  .cart-total__label  { font-weight: 700; font-size: var(--text-base, 1rem); }
+  .cart-total__amount { font-weight: 700; font-size: var(--text-base, 1rem); color: var(--color-primary); }
 
-  .cart-total { display: grid; grid-template-columns: 1fr auto; gap: 0.375rem 1rem; font-size: 0.875rem; }
-  .cart-total__label  { font-weight: 700; font-size: 1rem; }
-  .cart-total__amount { font-weight: 700; font-size: 1rem; color: var(--color-primary); }
-
-  .error-msg { color: var(--color-danger); font-size: 0.875rem; margin: 0; }
-
+  /* Receipt success */
   .receipt-success {
-    text-align: center; padding: 2rem;
-    display: flex; flex-direction: column; gap: 0.75rem; align-items: center;
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: var(--space-3, 0.75rem); text-align: center; padding: var(--space-8, 2rem);
   }
-  .receipt-success p { margin: 0; }
-  .receipt-success code { font-family: monospace; font-size: 0.75rem; }
+  .receipt-icon { width: 3rem; height: 3rem; color: var(--color-success); }
+  .receipt-title { font-size: var(--text-xl, 1.25rem); font-weight: 700; margin: 0; }
+  .receipt-total { font-size: var(--text-2xl, 1.5rem); font-weight: 700; color: var(--color-primary); margin: 0; }
+  .receipt-id { font-size: var(--text-xs, 0.75rem); color: var(--color-muted); margin: 0; }
+  .receipt-id code { font-family: monospace; }
 </style>

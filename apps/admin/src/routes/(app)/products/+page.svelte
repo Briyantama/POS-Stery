@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { getToken } from '$lib/auth';
   import { api, ApiError } from '$lib/api';
-  import { Button, Card, Table, Badge, Input, LoadingSpinner } from '@pos-stery/ui';
+  import { Alert, Badge, Button, Card, Input, PageHeader, Table } from '@pos-stery/ui';
 
   interface Product {
     product_id: string; name: string; sku: string; base_price: number;
@@ -31,10 +31,9 @@
 
 <svelte:head><title>Products — POS-Stery Admin</title></svelte:head>
 
-<div class="page-header">
-  <h1 class="page-title">Products</h1>
+<PageHeader title="Products">
   <Button onclick={() => {}}>+ Add Product</Button>
-</div>
+</PageHeader>
 
 <Card>
   <div class="toolbar">
@@ -42,9 +41,14 @@
   </div>
 
   {#if error}
-    <p class="error-msg" role="alert">{error}</p>
+    <Alert>{error}</Alert>
   {:else}
-    <Table headers={['SKU', 'Name', 'Base Price', 'Sale Price', 'Status']} {loading}>
+    <Table
+      headers={['SKU', 'Name', 'Base Price', 'Sale Price', 'Status']}
+      {loading}
+      isEmpty={products.length === 0}
+      empty="No products found."
+    >
       {#each products as p (p.product_id)}
         <tr>
           <td>{p.sku}</td>
@@ -53,16 +57,11 @@
           <td>IDR {p.sale_price.toLocaleString()}</td>
           <td><Badge variant={p.is_active ? 'success' : 'default'}>{p.is_active ? 'Active' : 'Inactive'}</Badge></td>
         </tr>
-      {:else}
-        {#if !loading}<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--color-muted)">No products found.</td></tr>{/if}
       {/each}
     </Table>
   {/if}
 </Card>
 
 <style>
-  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
-  .page-title  { font-size: 1.5rem; font-weight: 700; }
-  .toolbar     { margin-bottom: 1rem; max-width: 320px; }
-  .error-msg   { color: var(--color-danger); }
+  .toolbar { margin-bottom: var(--space-4, 1rem); max-width: 320px; }
 </style>

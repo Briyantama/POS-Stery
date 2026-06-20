@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { getToken } from '$lib/auth';
   import { api, ApiError } from '$lib/api';
-  import { Card, Table, Input, Button } from '@pos-stery/ui';
+  import { Alert, Button, Card, Input, PageHeader, StatCard, Table } from '@pos-stery/ui';
 
   interface TopProduct { product_id: string; name: string; quantity: number; revenue: number; }
   interface Report { total_sales: number; total_revenue: number; top_products: TopProduct[]; }
@@ -29,42 +29,39 @@
 
 <svelte:head><title>Reports — POS-Stery Admin</title></svelte:head>
 
-<div class="page-header">
-  <h1 class="page-title">Sales Report</h1>
+<PageHeader title="Sales Report">
   <div class="toolbar">
     <Input type="date" bind:value={date} />
     <Button onclick={load} {loading}>Load</Button>
   </div>
-</div>
+</PageHeader>
 
 {#if error}
-  <p class="error-msg" role="alert">{error}</p>
+  <Alert>{error}</Alert>
 {:else if report}
   <div class="stats-grid">
-    <Card title="Total Sales"><p class="stat">{report.total_sales}</p></Card>
-    <Card title="Total Revenue"><p class="stat">IDR {report.total_revenue.toLocaleString()}</p></Card>
+    <StatCard title="Total Sales" value={report.total_sales} />
+    <StatCard title="Total Revenue" value="IDR {report.total_revenue.toLocaleString()}" />
   </div>
 
   <Card title="Top Products">
-    <Table headers={['Product', 'Units Sold', 'Revenue']}>
+    <Table
+      headers={['Product', 'Units Sold', 'Revenue']}
+      isEmpty={(report.top_products ?? []).length === 0}
+      empty="No data for this date."
+    >
       {#each report.top_products ?? [] as p (p.product_id)}
         <tr>
           <td>{p.name}</td>
           <td>{p.quantity}</td>
           <td>IDR {p.revenue.toLocaleString()}</td>
         </tr>
-      {:else}
-        <tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--color-muted)">No data.</td></tr>
       {/each}
     </Table>
   </Card>
 {/if}
 
 <style>
-  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
-  .page-title  { font-size: 1.5rem; font-weight: 700; }
-  .toolbar     { display: flex; gap: 0.75rem; align-items: flex-end; }
-  .stats-grid  { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-  .stat        { font-size: 2rem; font-weight: 700; color: var(--color-primary); margin: 0; }
-  .error-msg   { color: var(--color-danger); }
+  .toolbar    { display: flex; gap: var(--space-3, 0.75rem); align-items: flex-end; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-4, 1rem); margin-bottom: var(--space-6, 1.5rem); }
 </style>
