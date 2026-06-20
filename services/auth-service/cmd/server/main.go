@@ -13,9 +13,9 @@ import (
 	"github.com/pos-stery/pos-stery/services/_shared/redis"
 	"github.com/pos-stery/pos-stery/services/_shared/server"
 	"github.com/pos-stery/pos-stery/services/auth-service/internal/application/commands"
-	grpcimpl "github.com/pos-stery/pos-stery/services/auth-service/internal/interfaces/grpc"
 	"github.com/pos-stery/pos-stery/services/auth-service/internal/infrastructure/jwt"
 	"github.com/pos-stery/pos-stery/services/auth-service/internal/infrastructure/redisstore"
+	grpcimpl "github.com/pos-stery/pos-stery/services/auth-service/internal/interfaces/grpc"
 )
 
 func main() {
@@ -38,7 +38,11 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("init logger: %w", err)
 	}
-	defer logger.Sync()
+	defer func() {
+		if err := logger.Sync(); err != nil {
+			log.Printf("failed to sync logger: %v", err)
+		}
+	}()
 
 	// Redis (token blacklist)
 	redisClient, err := redis.NewClient(cfg.Redis)

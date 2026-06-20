@@ -20,6 +20,6 @@
     "vite": "^5.4.0"
   },
   "dependencies": {
-    "@pos-stery/ui": "workspace:*"
+    "@pos-stery/ui": "file:../../packages/ui"
   }
 }

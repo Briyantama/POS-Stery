@@ -30,8 +30,8 @@ type ListCustomersResult struct {
 
 // CustomerQueryHandler handles customer read queries.
 type CustomerQueryHandler struct {
-	repo         domain.CustomerRepository
-	loyaltyRepo  domain.LoyaltyRepository
+	repo        domain.CustomerRepository
+	loyaltyRepo domain.LoyaltyRepository
 }
 
 // NewCustomerQueryHandler constructs a handler with the given repositories.

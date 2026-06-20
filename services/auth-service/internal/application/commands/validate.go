@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pos-stery/pos-stery/services/auth-service/internal/application"
 	sherrors "github.com/pos-stery/pos-stery/services/_shared/errors"
+	"github.com/pos-stery/pos-stery/services/auth-service/internal/application"
 )
 
 type ValidateCommand struct {

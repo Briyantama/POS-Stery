@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	sherrors "github.com/pos-stery/pos-stery/services/_shared/errors"
 	"github.com/pos-stery/pos-stery/services/auth-service/internal/application"
 	"github.com/pos-stery/pos-stery/services/auth-service/internal/domain"
-	sherrors "github.com/pos-stery/pos-stery/services/_shared/errors"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -24,9 +24,9 @@ type LoginResult struct {
 }
 
 type LoginHandler struct {
-	users   domain.UserRepository
-	stores  domain.StoreRepository
-	signer  application.TokenSigner
+	users  domain.UserRepository
+	stores domain.StoreRepository
+	signer application.TokenSigner
 }
 
 func NewLoginHandler(

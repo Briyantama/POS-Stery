@@ -158,6 +158,13 @@ lint-go:
 		(cd services/$$svc && golangci-lint run ./...); \
 	done
 
+.PHONY: fmt-go
+fmt-go:
+	@for svc in $(GO_SERVICES); do \
+		echo "→ fmt: services/$$svc"; \
+		(cd services/$$svc && go fmt ./...); \
+	done
+
 .PHONY: tidy
 tidy:
 	@# go work sync is skipped: internal modules use replace directives pointing to
@@ -181,7 +188,7 @@ sqlc-gen:
 
 .PHONY: install-gateway
 install-gateway:
-	cd apps/api-gateway && composer install
+	cd apps/api-gateway && PATH="$$(echo "$$PATH" | tr ':' '\n' | grep -vi 'chocolatey' | tr '\n' ':')" composer install
 
 .PHONY: test-gateway
 test-gateway:

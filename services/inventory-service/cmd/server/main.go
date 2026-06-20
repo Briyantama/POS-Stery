@@ -38,7 +38,11 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("init logger: %w", err)
 	}
-	defer logger.Sync()
+	defer func() {
+		if err := logger.Sync(); err != nil {
+			log.Printf("failed to sync logger: %v", err)
+		}
+	}()
 
 	// Database pool
 	pool, err := database.NewPool(context.Background(), cfg.DB)

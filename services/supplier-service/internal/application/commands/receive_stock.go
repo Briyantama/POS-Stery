@@ -26,9 +26,9 @@ type ReceiveStockCommand struct {
 
 // ReceiveStockHandler processes ReceiveStockCommand.
 type ReceiveStockHandler struct {
-	orderRepo     domain.PurchaseOrderRepository
-	inventory     application.InventoryPort
-	publisher     application.EventPublisher
+	orderRepo domain.PurchaseOrderRepository
+	inventory application.InventoryPort
+	publisher application.EventPublisher
 }
 
 // NewReceiveStockHandler creates a ReceiveStockHandler.

@@ -6,8 +6,8 @@ import (
 	"os"
 
 	inventoryv1 "github.com/pos-stery/pos-stery/gen/go/pos/inventory/v1"
-	"github.com/pos-stery/pos-stery/services/_shared/middleware"
 	sherrors "github.com/pos-stery/pos-stery/services/_shared/errors"
+	"github.com/pos-stery/pos-stery/services/_shared/middleware"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"

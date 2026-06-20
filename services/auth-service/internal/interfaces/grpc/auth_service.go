@@ -4,8 +4,8 @@ import (
 	"context"
 
 	authv1 "github.com/pos-stery/pos-stery/gen/go/pos/auth/v1"
-	"github.com/pos-stery/pos-stery/services/auth-service/internal/application/commands"
 	sherrors "github.com/pos-stery/pos-stery/services/_shared/errors"
+	"github.com/pos-stery/pos-stery/services/auth-service/internal/application/commands"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

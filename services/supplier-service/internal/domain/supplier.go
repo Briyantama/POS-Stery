@@ -31,13 +31,13 @@ type Supplier struct {
 
 // PurchaseOrderItem is a single line in a purchase order.
 type PurchaseOrderItem struct {
-	ID              uuid.UUID
-	TenantID        uuid.UUID
-	PurchaseOrderID uuid.UUID
-	ProductID       uuid.UUID
-	QuantityOrdered int32
+	ID               uuid.UUID
+	TenantID         uuid.UUID
+	PurchaseOrderID  uuid.UUID
+	ProductID        uuid.UUID
+	QuantityOrdered  int32
 	QuantityReceived int32
-	UnitCost        float64
+	UnitCost         float64
 }
 
 // PurchaseOrder is a formal request to a supplier to deliver products.
