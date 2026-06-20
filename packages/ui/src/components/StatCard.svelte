@@ -24,12 +24,11 @@
     gap: var(--space-2, 0.5rem);
   }
   .statcard__title {
-    font-size: var(--text-sm, 0.875rem);
+    font-size: var(--text-xs, 0.75rem);
     color: var(--color-muted, #7a7060);
     font-weight: var(--weight-medium, 500);
     text-transform: uppercase;
     letter-spacing: var(--tracking-wide, 0.08em);
-    font-size: var(--text-xs, 0.75rem);
   }
   .statcard__value {
     font-family: var(--font-mono);

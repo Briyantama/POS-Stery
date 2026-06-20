@@ -250,14 +250,12 @@
     padding: var(--space-5, 1.25rem);
   }
   .ops-title {
-    font-size: var(--text-sm, 0.875rem);
+    font-size: var(--text-xs, 0.75rem);
     font-weight: var(--weight-semibold, 600);
-    color: var(--color-text, #1a1611);
+    color: var(--color-muted, #7a7060);
     margin-bottom: var(--space-4, 1rem);
     text-transform: uppercase;
     letter-spacing: var(--tracking-wide, 0.08em);
-    font-size: var(--text-xs, 0.75rem);
-    color: var(--color-muted, #7a7060);
   }
   .ops-dl { margin: 0; display: flex; flex-direction: column; gap: var(--space-2, 0.5rem); }
   .ops-entry {

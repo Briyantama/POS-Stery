@@ -33,11 +33,12 @@
   let receiptDiscount: number   = 0;
   let receiptMethod: PayMethod  = 'Cash';
   let receiptTendered: number   = 0;
+  let receiptTime: string       = '';
 
   /* ── Derived ─────────────────────────────────────────────────── */
   const subtotal = $derived(cart.reduce((s, i) => s + price(i) * i.quantity, 0));
-  const total    = $derived(Math.max(0, subtotal - discountAmount));
-  const change   = $derived(payMethod === 'Cash' ? Math.max(0, cashTendered - total) : 0);
+  const total    = $derived(Math.max(0, subtotal - Number(discountAmount)));
+  const change   = $derived(payMethod === 'Cash' ? Math.max(0, Number(cashTendered) - total) : 0);
 
   const QUICK_CASH = $derived([
     Math.ceil(total / 10_000) * 10_000,
@@ -47,7 +48,10 @@
 
   function price(p: Product) { return p.sale_price || p.base_price; }
   function fmtIDR(n: number) { return 'IDR ' + n.toLocaleString('id-ID'); }
-  function now() { return new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }); }
+  function parseNumInput(e: Event): number {
+    const v = (e.target as HTMLInputElement).valueAsNumber;
+    return isNaN(v) ? 0 : v;
+  }
 
   /* ── Search ── */
   async function searchProducts() {
@@ -98,16 +102,17 @@
         {
           items: cart.map(i => ({ product_id: i.product_id, quantity: i.quantity, unit_price: price(i) })),
           customer_id:     customerId || undefined,
-          discount_amount: discountAmount,
+          discount_amount: Number(discountAmount),
           payment_method:  payMethod,
         },
         getToken() ?? undefined,
       );
       receiptData     = res;
       receiptCart     = [...cart];
-      receiptDiscount = discountAmount;
+      receiptDiscount = Number(discountAmount);
       receiptMethod   = payMethod;
-      receiptTendered = cashTendered;
+      receiptTendered = Number(cashTendered);
+      receiptTime     = new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
       stage           = 'receipt';
       cart            = [];
       discountAmount  = 0;
@@ -148,9 +153,9 @@
       </div>
 
       {#if searchResults.length}
-        <ul class="search-results" role="listbox" aria-label="Search results">
+        <ul class="search-results" aria-label="Search results">
           {#each searchResults as product (product.product_id)}
-            <li role="option" aria-selected="false">
+            <li>
               <button class="product-row" onclick={() => addToCart(product)}>
                 <span class="product-row__name">{product.name}</span>
                 <span class="product-row__sku">{product.sku}</span>
@@ -223,7 +228,12 @@
 
           <!-- Optional fields -->
           <div class="cart-opts">
-            <Input label="Discount (IDR)" type="number" bind:value={discountAmount as unknown as string} />
+            <Input
+              label="Discount (IDR)"
+              type="number"
+              value={discountAmount === 0 ? '' : String(discountAmount)}
+              oninput={(e) => { discountAmount = parseNumInput(e); }}
+            />
             <Input label="Customer ID (optional)" bind:value={customerId} placeholder="UUID" />
           </div>
 
@@ -263,7 +273,8 @@
             <Input
               label="Cash tendered (IDR)"
               type="number"
-              bind:value={cashTendered as unknown as string}
+              value={cashTendered === 0 ? '' : String(cashTendered)}
+              oninput={(e) => { cashTendered = parseNumInput(e); }}
             />
             {#if QUICK_CASH.length}
               <div class="quick-cash">
@@ -274,7 +285,7 @@
                 {/each}
               </div>
             {/if}
-            <div class="change-row" class:change-row--due={cashTendered < total && cashTendered > 0}>
+            <div class="change-row" class:change-row--due={Number(cashTendered) < total && Number(cashTendered) > 0}>
               <span class="change-label">Change due</span>
               <span class="change-amount">{fmtIDR(change)}</span>
             </div>
@@ -289,7 +300,7 @@
           size="lg"
           onclick={submitSale}
           loading={submitting}
-          disabled={submitting || (payMethod === 'Cash' && cashTendered < total)}
+          disabled={submitting || (payMethod === 'Cash' && Number(cashTendered) < total)}
         >
           {submitting ? 'Processing…' : `Confirm ${payMethod} · ${fmtIDR(total)}`}
         </Button>
@@ -314,7 +325,7 @@
           <!-- Receipt header -->
           <div class="rct-header">
             <p class="rct-store">POS-Stery</p>
-            <p class="rct-date">{now()}</p>
+            <p class="rct-date">{receiptTime}</p>
             <p class="rct-ref">{receiptData?.sale_id ?? '—'}</p>
           </div>
 
@@ -405,13 +416,12 @@
     background: var(--color-surface, #fff);
   }
   .panel-title {
-    font-size: var(--text-sm, 0.875rem);
+    font-size: var(--text-xs, 0.75rem);
     font-weight: var(--weight-semibold, 600);
     color: var(--color-text, #1a1611);
     margin: 0;
     text-transform: uppercase;
     letter-spacing: var(--tracking-wide, 0.08em);
-    font-size: var(--text-xs, 0.75rem);
   }
 
   .panel-body {
@@ -483,7 +493,7 @@
     width: 1.625rem; height: 1.625rem;
     border: 1px solid var(--color-border, #e2dbcd);
     border-radius: var(--radius-sm, 0.25rem);
-    background: none; cursor: pointer; font-size: 0.9rem; line-height: 1;
+    background: none; cursor: pointer; font-size: var(--text-sm, 0.875rem); line-height: 1;
     transition: background 140ms, transform 90ms;
   }
   .qty-btn:hover  { background: var(--color-surface-hover, #eee8dc); }
@@ -524,6 +534,7 @@
     padding: 0; transition: color 140ms;
   }
   .back-btn:hover { color: var(--color-text, #1a1611); }
+  .back-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring-color); border-radius: var(--radius-sm); }
 
   .tender-due {
     display: flex;
@@ -552,6 +563,7 @@
   }
   .method-btn:hover { border-color: var(--color-primary, #1b3b8f); color: var(--color-primary, #1b3b8f); }
   .method-btn:active { transform: translateY(1px); }
+  .method-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring-color); }
   .method-btn--active {
     border-color: var(--color-primary, #1b3b8f);
     background: var(--color-primary-light, #e3e8f5);
@@ -577,6 +589,7 @@
   }
   .quick-chip:hover  { border-color: var(--color-primary, #1b3b8f); background: var(--color-primary-light, #e3e8f5); }
   .quick-chip:active { transform: translateY(1px); }
+  .quick-chip:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring-color); }
 
   .change-row {
     display: flex;

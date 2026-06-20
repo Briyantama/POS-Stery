@@ -126,7 +126,7 @@
   }
   /* Active state: white text + marigold 3px left rail */
   .sidebar__link[aria-current="page"] {
-    color: #fff;
+    color: var(--color-on-ink, #f0ebe1);
     background: rgb(255 255 255 / 0.1);
   }
   .sidebar__link[aria-current="page"]::before {
@@ -156,6 +156,7 @@
     color: var(--color-on-ink, #f0ebe1);
     border-color: rgb(255 255 255 / 0.3);
   }
+  .sidebar__logout:focus-visible { outline: none; box-shadow: 0 0 0 3px rgb(255 255 255 / 0.3); }
 
   /* ---- Content area ---- */
   .main-area { flex: 1; min-width: 0; display: flex; flex-direction: column; }

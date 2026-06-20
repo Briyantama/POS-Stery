@@ -28,6 +28,7 @@ export function clearSession(): void {
 }
 
 export function requireCashier(): void {
+  if (!browser) return;
   const role = localStorage.getItem(ROLE_KEY);
   if (role !== 'cashier') goto('/login');
 }

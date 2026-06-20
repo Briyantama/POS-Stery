@@ -110,7 +110,7 @@
   .topbar__link:hover { color: var(--color-on-ink, #f0ebe1); }
   /* Active: white text + marigold underline */
   .topbar__link[aria-current="page"] {
-    color: #fff;
+    color: var(--color-on-ink, #f0ebe1);
     border-bottom-color: var(--color-accent, #e0992e);
   }
 
@@ -126,8 +126,9 @@
   }
   .topbar__logout:hover {
     background: rgb(255 255 255 / 0.18);
-    color: #fff;
+    color: var(--color-on-ink, #f0ebe1);
   }
+  .topbar__logout:focus-visible { outline: none; box-shadow: 0 0 0 3px rgb(255 255 255 / 0.3); }
 
   /* ---- Content (full remaining height, no padding — POS page owns its own layout) ---- */
   .content {
