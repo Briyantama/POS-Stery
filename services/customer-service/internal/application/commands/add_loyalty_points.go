@@ -44,6 +44,15 @@ func NewAddLoyaltyPointsHandler(
 // Handle validates the command, verifies the customer exists, records the
 // loyalty entry and returns the updated total.
 func (h *AddLoyaltyPointsHandler) Handle(ctx context.Context, cmd AddLoyaltyPointsCommand) (*AddLoyaltyPointsResult, error) {
+	if cmd.TenantID == uuid.Nil {
+		return nil, fmt.Errorf("tenant_id is required: %w", sherrors.ErrInvalidArgument)
+	}
+	if cmd.CustomerID == uuid.Nil {
+		return nil, fmt.Errorf("customer_id is required: %w", sherrors.ErrInvalidArgument)
+	}
+	if cmd.SaleID == uuid.Nil {
+		return nil, fmt.Errorf("sale_id is required: %w", sherrors.ErrInvalidArgument)
+	}
 	if cmd.Points <= 0 {
 		return nil, fmt.Errorf("points must be positive: %w", sherrors.ErrInvalidArgument)
 	}

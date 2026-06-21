@@ -33,6 +33,9 @@ func NewCreateCustomerHandler(repo domain.CustomerRepository, publisher applicat
 
 // Handle validates the command, persists the customer and publishes Customer.New.
 func (h *CreateCustomerHandler) Handle(ctx context.Context, cmd CreateCustomerCommand) (*domain.Customer, error) {
+	if cmd.TenantID == uuid.Nil {
+		return nil, fmt.Errorf("tenant_id is required: %w", sherrors.ErrInvalidArgument)
+	}
 	if cmd.Name == "" {
 		return nil, fmt.Errorf("name is required: %w", sherrors.ErrInvalidArgument)
 	}

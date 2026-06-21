@@ -102,13 +102,6 @@ func validUpdateCmd(tenantID, storeID, productID uuid.UUID, delta int64) command
 	}
 }
 
-func newUpdateStockHandler(stock *stubStockRepo, thresh *stubThresholdRepo, pub interface {
-	PublishLowStock(context.Context, domain.LowStockDetected) error
-	PublishReplenished(context.Context, string, string, string, int64) error
-}) *commands.UpdateStockHandler {
-	return commands.NewUpdateStockHandler(stock, thresh, pub)
-}
-
 // ── tests ──────────────────────────────────────────────────────────────────────
 
 func TestUpdateStock_MissingTenantID(t *testing.T) {

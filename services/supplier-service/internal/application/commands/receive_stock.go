@@ -72,6 +72,9 @@ func (h *ReceiveStockHandler) Handle(ctx context.Context, cmd ReceiveStockComman
 	if order.Status == domain.StatusCancelled {
 		return nil, fmt.Errorf("cannot receive against a cancelled order: %w", sherrors.ErrInvalidArgument)
 	}
+	if order.Status == domain.StatusReceived {
+		return nil, fmt.Errorf("order already received: %w", sherrors.ErrInvalidArgument)
+	}
 
 	// Build a map of received quantities keyed by product ID for easy lookup.
 	receivedMap := make(map[uuid.UUID]int32, len(cmd.ItemsReceived))

@@ -136,6 +136,23 @@ func TestReceiveStock_EmptyItems(t *testing.T) {
 	}
 }
 
+func TestReceiveStock_AlreadyReceivedOrder(t *testing.T) {
+	tenantID, storeID, productID := uuid.New(), uuid.New(), uuid.New()
+	order := pendingOrder(tenantID, storeID, productID, 10)
+	order.Status = domain.StatusReceived
+
+	cmd := commands.ReceiveStockCommand{
+		TenantID:        tenantID,
+		StoreID:         storeID,
+		PurchaseOrderID: order.ID,
+		ItemsReceived:   []commands.ReceivedLineItem{{ProductID: productID, QuantityReceived: 5}},
+	}
+	_, err := newReceiveHandler(&stubPORepo{order: order}, &stubInventoryPort{}, &stubSupplierPublisher{}).Handle(context.Background(), cmd)
+	if !errors.Is(err, sherrors.ErrInvalidArgument) {
+		t.Fatalf("want ErrInvalidArgument for already-received order, got %v", err)
+	}
+}
+
 func TestReceiveStock_CancelledOrder(t *testing.T) {
 	tenantID, storeID, productID := uuid.New(), uuid.New(), uuid.New()
 	order := pendingOrder(tenantID, storeID, productID, 10)

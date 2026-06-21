@@ -41,6 +41,15 @@ func (p *stubCustomerPublisher) PublishCustomerNew(_ context.Context, _, _, _ st
 
 // ── tests ──────────────────────────────────────────────────────────────────────
 
+func TestCreateCustomer_MissingTenantID(t *testing.T) {
+	cmd := commands.CreateCustomerCommand{TenantID: uuid.Nil, Name: "Jane"}
+
+	_, err := commands.NewCreateCustomerHandler(&stubCustomerRepo{}, &stubCustomerPublisher{}).Handle(context.Background(), cmd)
+	if !errors.Is(err, sherrors.ErrInvalidArgument) {
+		t.Fatalf("want ErrInvalidArgument for nil tenant_id, got %v", err)
+	}
+}
+
 func TestCreateCustomer_MissingName(t *testing.T) {
 	cmd := commands.CreateCustomerCommand{TenantID: uuid.New(), Name: ""}
 
