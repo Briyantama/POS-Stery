@@ -8,12 +8,14 @@ import (
 
 	authv1 "github.com/pos-stery/pos-stery/gen/go/pos/auth/v1"
 	"github.com/pos-stery/pos-stery/services/_shared/config"
+	"github.com/pos-stery/pos-stery/services/_shared/database"
 	"github.com/pos-stery/pos-stery/services/_shared/nats"
 	"github.com/pos-stery/pos-stery/services/_shared/observability"
 	"github.com/pos-stery/pos-stery/services/_shared/redis"
 	"github.com/pos-stery/pos-stery/services/_shared/server"
 	"github.com/pos-stery/pos-stery/services/auth-service/internal/application/commands"
 	"github.com/pos-stery/pos-stery/services/auth-service/internal/infrastructure/jwt"
+	"github.com/pos-stery/pos-stery/services/auth-service/internal/infrastructure/postgres"
 	"github.com/pos-stery/pos-stery/services/auth-service/internal/infrastructure/redisstore"
 	grpcimpl "github.com/pos-stery/pos-stery/services/auth-service/internal/interfaces/grpc"
 )
@@ -73,13 +75,18 @@ func run() error {
 	blacklist := redisstore.NewTokenBlacklist(redisClient)
 	signer.SetBlacklistStore(blacklist)
 
-	// Database pool — auth service needs it for user/tenant lookups
-	// TODO: wire postgres user/tenant repositories when implemented
-	_ = context.Background() // placeholder until repos are wired
+	// Database pool
+	pool, err := database.NewPool(context.Background(), cfg.DB)
+	if err != nil {
+		return fmt.Errorf("database pool: %w", err)
+	}
+	defer pool.Close()
+
+	userRepo := postgres.NewUserRepository(pool)
+	storeRepo := postgres.NewStoreRepository(pool)
 
 	// Command handlers
-	// TODO: replace nil with real repo implementations
-	loginHandler := commands.NewLoginHandler(nil, nil, signer)
+	loginHandler := commands.NewLoginHandler(userRepo, storeRepo, signer)
 	validateHandler := commands.NewValidateHandler(signer)
 
 	// gRPC server
