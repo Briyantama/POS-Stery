@@ -47,9 +47,11 @@ func (s *stubSigner) Issue(claims application.TokenClaims) (string, time.Time, e
 	return s.issued, time.Now().Add(time.Hour), nil
 }
 
-func (s *stubSigner) Verify(_ string) (*application.TokenClaims, error) { return nil, nil }
-func (s *stubSigner) Blacklist(_ string) error                           { return nil }
-func (s *stubSigner) IsBlacklisted(_ string) (bool, error)              { return false, nil }
+func (s *stubSigner) Verify(_ string) (*application.TokenClaims, error) {
+	return &application.TokenClaims{JTI: uuid.New().String()}, nil
+}
+func (s *stubSigner) Blacklist(_ string) error             { return nil }
+func (s *stubSigner) IsBlacklisted(_ string) (bool, error) { return false, nil }
 
 // ---- helpers ----
 
@@ -88,10 +90,15 @@ func cashierUser(t *testing.T, storeID uuid.UUID) *domain.User {
 	}
 }
 
+// newLoginHandler constructs a LoginHandler with a no-op refresh token repo.
+func newLoginHandler(users domain.UserRepository, stores domain.StoreRepository, signer application.TokenSigner) *commands.LoginHandler {
+	return commands.NewLoginHandler(users, stores, signer, newStubRefreshTokenRepo())
+}
+
 // ---- tests ----
 
 func TestLoginHandler_EmptyCredentials(t *testing.T) {
-	h := commands.NewLoginHandler(&stubUserRepo{}, &stubStoreRepo{}, &stubSigner{})
+	h := newLoginHandler(&stubUserRepo{}, &stubStoreRepo{}, &stubSigner{})
 
 	_, err := h.Handle(context.Background(), commands.LoginCommand{
 		TenantID: validTenant(),
@@ -104,7 +111,7 @@ func TestLoginHandler_EmptyCredentials(t *testing.T) {
 }
 
 func TestLoginHandler_InvalidTenantID(t *testing.T) {
-	h := commands.NewLoginHandler(&stubUserRepo{}, &stubStoreRepo{}, &stubSigner{})
+	h := newLoginHandler(&stubUserRepo{}, &stubStoreRepo{}, &stubSigner{})
 
 	_, err := h.Handle(context.Background(), commands.LoginCommand{
 		TenantID: "not-a-uuid",
@@ -117,7 +124,7 @@ func TestLoginHandler_InvalidTenantID(t *testing.T) {
 }
 
 func TestLoginHandler_UserNotFound(t *testing.T) {
-	h := commands.NewLoginHandler(
+	h := newLoginHandler(
 		&stubUserRepo{err: sherrors.ErrNotFound},
 		&stubStoreRepo{},
 		&stubSigner{},
@@ -135,7 +142,7 @@ func TestLoginHandler_UserNotFound(t *testing.T) {
 
 func TestLoginHandler_RepoInfraError(t *testing.T) {
 	dbErr := errors.New("connection refused")
-	h := commands.NewLoginHandler(
+	h := newLoginHandler(
 		&stubUserRepo{err: dbErr},
 		&stubStoreRepo{},
 		&stubSigner{},
@@ -156,7 +163,7 @@ func TestLoginHandler_RepoInfraError(t *testing.T) {
 
 func TestLoginHandler_WrongPassword(t *testing.T) {
 	user := adminUser(t)
-	h := commands.NewLoginHandler(&stubUserRepo{user: user}, &stubStoreRepo{}, &stubSigner{})
+	h := newLoginHandler(&stubUserRepo{user: user}, &stubStoreRepo{}, &stubSigner{})
 
 	_, err := h.Handle(context.Background(), commands.LoginCommand{
 		TenantID: validTenant(),
@@ -171,7 +178,7 @@ func TestLoginHandler_WrongPassword(t *testing.T) {
 func TestLoginHandler_InactiveUser(t *testing.T) {
 	user := adminUser(t)
 	user.IsActive = false
-	h := commands.NewLoginHandler(&stubUserRepo{user: user}, &stubStoreRepo{}, &stubSigner{})
+	h := newLoginHandler(&stubUserRepo{user: user}, &stubStoreRepo{}, &stubSigner{})
 
 	_, err := h.Handle(context.Background(), commands.LoginCommand{
 		TenantID: validTenant(),
@@ -186,7 +193,7 @@ func TestLoginHandler_InactiveUser(t *testing.T) {
 func TestLoginHandler_CashierMissingStoreID(t *testing.T) {
 	storeID := uuid.New()
 	user := cashierUser(t, storeID)
-	h := commands.NewLoginHandler(&stubUserRepo{user: user}, &stubStoreRepo{}, &stubSigner{})
+	h := newLoginHandler(&stubUserRepo{user: user}, &stubStoreRepo{}, &stubSigner{})
 
 	_, err := h.Handle(context.Background(), commands.LoginCommand{
 		TenantID: validTenant(),
@@ -202,7 +209,7 @@ func TestLoginHandler_CashierMissingStoreID(t *testing.T) {
 func TestLoginHandler_CashierWrongStore(t *testing.T) {
 	storeID := uuid.New()
 	user := cashierUser(t, storeID)
-	h := commands.NewLoginHandler(&stubUserRepo{user: user}, &stubStoreRepo{}, &stubSigner{})
+	h := newLoginHandler(&stubUserRepo{user: user}, &stubStoreRepo{}, &stubSigner{})
 
 	_, err := h.Handle(context.Background(), commands.LoginCommand{
 		TenantID: validTenant(),
@@ -218,7 +225,7 @@ func TestLoginHandler_CashierWrongStore(t *testing.T) {
 func TestLoginHandler_AdminSuccess(t *testing.T) {
 	user := adminUser(t)
 	signer := &stubSigner{}
-	h := commands.NewLoginHandler(&stubUserRepo{user: user}, &stubStoreRepo{}, signer)
+	h := newLoginHandler(&stubUserRepo{user: user}, &stubStoreRepo{}, signer)
 
 	res, err := h.Handle(context.Background(), commands.LoginCommand{
 		TenantID: validTenant(),
@@ -234,13 +241,19 @@ func TestLoginHandler_AdminSuccess(t *testing.T) {
 	if res.Claims.StoreID != "" {
 		t.Errorf("admin token must not carry store_id, got %q", res.Claims.StoreID)
 	}
+	if res.AccessToken == "" {
+		t.Error("expected non-empty access token")
+	}
+	if res.RefreshToken == "" {
+		t.Error("expected non-empty refresh token")
+	}
 }
 
 func TestLoginHandler_CashierSuccess(t *testing.T) {
 	storeID := uuid.New()
 	user := cashierUser(t, storeID)
 	signer := &stubSigner{}
-	h := commands.NewLoginHandler(&stubUserRepo{user: user}, &stubStoreRepo{}, signer)
+	h := newLoginHandler(&stubUserRepo{user: user}, &stubStoreRepo{}, signer)
 
 	res, err := h.Handle(context.Background(), commands.LoginCommand{
 		TenantID: validTenant(),
@@ -256,5 +269,8 @@ func TestLoginHandler_CashierSuccess(t *testing.T) {
 	}
 	if res.Claims.StoreID != storeID.String() {
 		t.Errorf("want store_id=%s, got %q", storeID, res.Claims.StoreID)
+	}
+	if res.RefreshToken == "" {
+		t.Error("expected non-empty refresh token on cashier login")
 	}
 }

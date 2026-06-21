@@ -7,10 +7,11 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/pos-stery/pos-stery/services/auth-service/internal/application"
 )
 
-const tokenTTL = 60 * time.Minute
+const accessTokenTTL = 10 * time.Minute
 
 type posClaims struct {
 	jwt.RegisteredClaims
@@ -50,9 +51,11 @@ func NewRSASigner(privateKeyPath, publicKeyPath string) (*RSASigner, error) {
 
 func (s *RSASigner) Issue(claims application.TokenClaims) (string, time.Time, error) {
 	now := time.Now()
-	expiresAt := now.Add(tokenTTL)
+	expiresAt := now.Add(accessTokenTTL)
+	jti := uuid.New().String()
 	jwtClaims := posClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        jti,
 			Subject:   claims.UserID,
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
@@ -85,6 +88,7 @@ func (s *RSASigner) Verify(tokenStr string) (*application.TokenClaims, error) {
 	}
 
 	return &application.TokenClaims{
+		JTI:      c.ID,
 		UserID:   c.Subject,
 		TenantID: c.TenantID,
 		StoreID:  c.StoreID,
@@ -94,17 +98,17 @@ func (s *RSASigner) Verify(tokenStr string) (*application.TokenClaims, error) {
 }
 
 // Blacklist and IsBlacklisted are delegated to the Redis store.
-// They are set via SetBlacklistStore after construction.
-func (s *RSASigner) Blacklist(token string) error {
+// The key is the JTI (not the full token string).
+func (s *RSASigner) Blacklist(jti string) error {
 	if s.blacklist != nil {
-		return s.blacklist.Blacklist(token)
+		return s.blacklist.Blacklist(jti)
 	}
 	return nil
 }
 
-func (s *RSASigner) IsBlacklisted(token string) (bool, error) {
+func (s *RSASigner) IsBlacklisted(jti string) (bool, error) {
 	if s.blacklist != nil {
-		return s.blacklist.IsBlacklisted(token)
+		return s.blacklist.IsBlacklisted(jti)
 	}
 	return false, nil
 }

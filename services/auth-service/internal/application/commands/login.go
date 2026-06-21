@@ -2,6 +2,10 @@ package commands
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -14,30 +18,35 @@ import (
 )
 
 type LoginCommand struct {
-	TenantID string
-	Email    string
-	Password string
-	StoreID  string // required for cashier role; empty for admin
+	TenantID  string
+	Email     string
+	Password  string
+	StoreID   string // required for cashier role; empty for admin
+	UserAgent string
+	IPAddress string
 }
 
 type LoginResult struct {
-	Token     string
-	ExpiresAt time.Time
-	Claims    application.TokenClaims
+	AccessToken  string
+	RefreshToken string
+	ExpiresAt    time.Time
+	Claims       application.TokenClaims
 }
 
 type LoginHandler struct {
-	users  domain.UserRepository
-	stores domain.StoreRepository
-	signer application.TokenSigner
+	users            domain.UserRepository
+	stores           domain.StoreRepository
+	signer           application.TokenSigner
+	refreshTokenRepo domain.RefreshTokenRepository
 }
 
 func NewLoginHandler(
 	users domain.UserRepository,
 	stores domain.StoreRepository,
 	signer application.TokenSigner,
+	refreshTokenRepo domain.RefreshTokenRepository,
 ) *LoginHandler {
-	return &LoginHandler{users: users, stores: stores, signer: signer}
+	return &LoginHandler{users: users, stores: stores, signer: signer, refreshTokenRepo: refreshTokenRepo}
 }
 
 func (h *LoginHandler) Handle(ctx context.Context, cmd LoginCommand) (*LoginResult, error) {
@@ -92,10 +101,50 @@ func (h *LoginHandler) Handle(ctx context.Context, cmd LoginCommand) (*LoginResu
 		Email:    user.Email,
 	}
 
-	token, expiresAt, err := h.signer.Issue(claims)
+	accessToken, expiresAt, err := h.signer.Issue(claims)
 	if err != nil {
 		return nil, fmt.Errorf("issue token: %w", err)
 	}
 
-	return &LoginResult{Token: token, ExpiresAt: expiresAt, Claims: claims}, nil
+	rawRefresh, hashRefresh, err := generateRefreshToken()
+	if err != nil {
+		return nil, fmt.Errorf("generate refresh token: %w", err)
+	}
+
+	now := time.Now().UTC()
+	rt := &domain.RefreshToken{
+		ID:        uuid.New(),
+		UserID:    user.ID,
+		TenantID:  user.TenantID,
+		FamilyID:  uuid.New(), // new family per login
+		TokenHash: hashRefresh,
+		IssuedAt:  now,
+		ExpiresAt: now.Add(domain.RefreshTokenTTL),
+		UserAgent: cmd.UserAgent,
+		IPAddress: cmd.IPAddress,
+	}
+	if err := h.refreshTokenRepo.Create(ctx, rt); err != nil {
+		return nil, fmt.Errorf("store refresh token: %w", err)
+	}
+
+	return &LoginResult{
+		AccessToken:  accessToken,
+		RefreshToken: rawRefresh,
+		ExpiresAt:    expiresAt,
+		Claims:       claims,
+	}, nil
+}
+
+// generateRefreshToken creates a cryptographically secure random token.
+// Returns the raw (base64url) value sent to the client and its SHA-256 hex hash
+// for storage.
+func generateRefreshToken() (raw, hash string, err error) {
+	b := make([]byte, 32)
+	if _, err = rand.Read(b); err != nil {
+		return "", "", fmt.Errorf("generate refresh token bytes: %w", err)
+	}
+	raw = base64.RawURLEncoding.EncodeToString(b)
+	h := sha256.Sum256([]byte(raw))
+	hash = hex.EncodeToString(h[:])
+	return
 }

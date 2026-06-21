@@ -84,10 +84,15 @@ func run() error {
 
 	userRepo := postgres.NewUserRepository(pool)
 	storeRepo := postgres.NewStoreRepository(pool)
+	refreshTokenRepo := postgres.NewRefreshTokenRepository(pool)
 
 	// Command handlers
-	loginHandler := commands.NewLoginHandler(userRepo, storeRepo, signer)
+	loginHandler := commands.NewLoginHandler(userRepo, storeRepo, signer, refreshTokenRepo)
 	validateHandler := commands.NewValidateHandler(signer)
+	logoutHandler := commands.NewLogoutHandler(refreshTokenRepo, signer, logger)
+	refreshHandler := commands.NewRefreshHandler(refreshTokenRepo, userRepo, signer, logger)
+	logoutAllHandler := commands.NewLogoutAllHandler(refreshTokenRepo, signer, logger)
+	listSessionsHandler := commands.NewListSessionsHandler(refreshTokenRepo, signer)
 
 	// gRPC server
 	grpcSrv := server.New(server.Config{
@@ -95,7 +100,15 @@ func run() error {
 		ServiceTokenSecret: cfg.ServiceToken,
 	}, logger)
 
-	authv1.RegisterAuthServiceServer(grpcSrv, grpcimpl.NewAuthServiceServer(loginHandler, validateHandler, signer))
+	authv1.RegisterAuthServiceServer(grpcSrv, grpcimpl.NewAuthServiceServer(
+		loginHandler,
+		validateHandler,
+		logoutHandler,
+		refreshHandler,
+		logoutAllHandler,
+		listSessionsHandler,
+		signer,
+	))
 
 	logger.Sugar().Infof("auth-service listening on :%d", cfg.GRPC.Port)
 

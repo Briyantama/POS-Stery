@@ -10,7 +10,7 @@ import (
 )
 
 const blacklistPrefix = "pos:token:blacklist:"
-const blacklistTTL = 2 * time.Hour // slightly longer than JWT TTL
+const blacklistTTL = 15 * time.Minute // access tokens expire in 10min; 5min buffer for clock drift
 
 type TokenBlacklist struct {
 	client *redis.Client

@@ -18,6 +18,7 @@ type BlacklistStore interface {
 
 // TokenClaims is the set of claims embedded in every JWT.
 type TokenClaims struct {
+	JTI      string // JWT ID — used for access token blacklisting
 	UserID   string
 	TenantID string
 	StoreID  string // empty for admin tokens

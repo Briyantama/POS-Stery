@@ -50,3 +50,19 @@ CREATE TABLE auth.user_roles (
     store_id  UUID,
     tenant_id UUID NOT NULL REFERENCES auth.tenants(id)
 );
+
+CREATE TABLE auth.refresh_tokens (
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    tenant_id   UUID        NOT NULL REFERENCES auth.tenants(id),
+    family_id   UUID        NOT NULL,
+    token_hash  TEXT        NOT NULL UNIQUE,
+    issued_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at  TIMESTAMPTZ NOT NULL,
+    revoked_at  TIMESTAMPTZ,
+    replaced_by UUID,
+    user_agent  TEXT        NOT NULL DEFAULT '',
+    ip_address  TEXT        NOT NULL DEFAULT '',
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

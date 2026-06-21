@@ -30,16 +30,16 @@ func (h *ValidateHandler) Handle(ctx context.Context, cmd ValidateCommand) (*Val
 		return nil, fmt.Errorf("%w: token required", sherrors.ErrInvalidArgument)
 	}
 
-	blacklisted, err := h.signer.IsBlacklisted(cmd.Token)
+	claims, err := h.signer.Verify(cmd.Token)
+	if err != nil {
+		return &ValidateResult{Valid: false}, nil
+	}
+
+	blacklisted, err := h.signer.IsBlacklisted(claims.JTI)
 	if err != nil {
 		return nil, fmt.Errorf("check blacklist: %w", err)
 	}
 	if blacklisted {
-		return &ValidateResult{Valid: false}, nil
-	}
-
-	claims, err := h.signer.Verify(cmd.Token)
-	if err != nil {
 		return &ValidateResult{Valid: false}, nil
 	}
 

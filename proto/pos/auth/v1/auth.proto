@@ -28,20 +28,44 @@ service AuthService {
       body: "*"
     };
   }
+
+  rpc Refresh(RefreshRequest) returns (RefreshResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/refresh"
+      body: "*"
+    };
+  }
+
+  rpc LogoutAll(LogoutAllRequest) returns (LogoutAllResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/logout-all"
+      body: "*"
+    };
+  }
+
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse) {
+    option (google.api.http) = {
+      get: "/v1/auth/sessions"
+    };
+  }
 }
 
 message LoginRequest {
-  string tenant_id = 1;
-  string email     = 2;
-  string password  = 3;
+  string tenant_id  = 1;
+  string email      = 2;
+  string password   = 3;
   // store_id is required for cashier role; omit for admin login
-  string store_id  = 4;
+  string store_id   = 4;
+  string user_agent = 5;
+  string ip_address = 6;
 }
 
 message LoginResponse {
-  string                    token      = 1;
-  google.protobuf.Timestamp expires_at = 2;
-  UserClaims                claims     = 3;
+  string                    access_token  = 1;
+  google.protobuf.Timestamp expires_at    = 2;
+  UserClaims                claims        = 3;
+  string                    refresh_token = 4;
+  string                    token_type    = 5;
 }
 
 message ValidateRequest {
@@ -54,11 +78,51 @@ message ValidateResponse {
 }
 
 message LogoutRequest {
-  string token = 1;
+  string access_token  = 1;
+  string refresh_token = 2;
 }
 
 message LogoutResponse {
   bool success = 1;
+}
+
+message RefreshRequest {
+  string refresh_token = 1;
+  string user_agent    = 2;
+  string ip_address    = 3;
+}
+
+message RefreshResponse {
+  string                    access_token  = 1;
+  google.protobuf.Timestamp expires_at    = 2;
+  UserClaims                claims        = 3;
+  string                    refresh_token = 4;
+  string                    token_type    = 5;
+}
+
+message LogoutAllRequest {
+  string access_token = 1;
+}
+
+message LogoutAllResponse {
+  bool success = 1;
+}
+
+message ListSessionsRequest {
+  string access_token = 1;
+}
+
+message ListSessionsResponse {
+  repeated SessionInfo sessions = 1;
+}
+
+message SessionInfo {
+  string                    session_id = 1;
+  string                    family_id  = 2;
+  google.protobuf.Timestamp issued_at  = 3;
+  google.protobuf.Timestamp expires_at = 4;
+  string                    user_agent = 5;
+  string                    ip_address = 6;
 }
 
 message UserClaims {

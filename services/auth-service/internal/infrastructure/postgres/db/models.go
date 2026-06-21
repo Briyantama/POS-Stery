@@ -11,6 +11,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AuthRefreshToken struct {
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	TenantID   uuid.UUID
+	FamilyID   uuid.UUID
+	TokenHash  string
+	IssuedAt   time.Time
+	ExpiresAt  time.Time
+	RevokedAt  *time.Time
+	ReplacedBy *uuid.UUID
+	UserAgent  string
+	IpAddress  string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
 type AuthRole struct {
 	ID          uuid.UUID
 	Name        string
