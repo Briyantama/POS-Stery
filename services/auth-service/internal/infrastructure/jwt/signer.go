@@ -1,6 +1,7 @@
 package jwt
 
 import (
+	"context"
 	"crypto/rsa"
 	"fmt"
 	"os"
@@ -27,7 +28,7 @@ type RSASigner struct {
 	blacklist  application.BlacklistStore
 }
 
-func NewRSASigner(privateKeyPath, publicKeyPath string) (*RSASigner, error) {
+func NewRSASigner(privateKeyPath, publicKeyPath string, blacklist application.BlacklistStore) (*RSASigner, error) {
 	privBytes, err := os.ReadFile(privateKeyPath)
 	if err != nil {
 		return nil, fmt.Errorf("read private key: %w", err)
@@ -46,7 +47,7 @@ func NewRSASigner(privateKeyPath, publicKeyPath string) (*RSASigner, error) {
 		return nil, fmt.Errorf("parse public key: %w", err)
 	}
 
-	return &RSASigner{privateKey: privKey, publicKey: pubKey}, nil
+	return &RSASigner{privateKey: privKey, publicKey: pubKey, blacklist: blacklist}, nil
 }
 
 func (s *RSASigner) Issue(claims application.TokenClaims) (string, time.Time, error) {
@@ -97,22 +98,12 @@ func (s *RSASigner) Verify(tokenStr string) (*application.TokenClaims, error) {
 	}, nil
 }
 
-// Blacklist and IsBlacklisted are delegated to the Redis store.
-// The key is the JTI (not the full token string).
-func (s *RSASigner) Blacklist(jti string) error {
-	if s.blacklist != nil {
-		return s.blacklist.Blacklist(jti)
-	}
-	return nil
+// Blacklist and IsBlacklisted delegate to the Redis store via context.
+// The JTI (not the full token string) is used as the key.
+func (s *RSASigner) Blacklist(ctx context.Context, jti string) error {
+	return s.blacklist.Blacklist(ctx, jti)
 }
 
-func (s *RSASigner) IsBlacklisted(jti string) (bool, error) {
-	if s.blacklist != nil {
-		return s.blacklist.IsBlacklisted(jti)
-	}
-	return false, nil
-}
-
-func (s *RSASigner) SetBlacklistStore(store application.BlacklistStore) {
-	s.blacklist = store
+func (s *RSASigner) IsBlacklisted(ctx context.Context, jti string) (bool, error) {
+	return s.blacklist.IsBlacklisted(ctx, jti)
 }

@@ -1,6 +1,7 @@
 package jwt_test
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -12,6 +13,11 @@ import (
 	"github.com/pos-stery/pos-stery/services/auth-service/internal/application"
 	"github.com/pos-stery/pos-stery/services/auth-service/internal/infrastructure/jwt"
 )
+
+type noOpBlacklist struct{}
+
+func (noOpBlacklist) Blacklist(_ context.Context, _ string) error             { return nil }
+func (noOpBlacklist) IsBlacklisted(_ context.Context, _ string) (bool, error) { return false, nil }
 
 func newTestSigner(t *testing.T) *jwt.RSASigner {
 	t.Helper()
@@ -37,7 +43,7 @@ func newTestSigner(t *testing.T) *jwt.RSASigner {
 	_ = pem.Encode(pubFile, &pem.Block{Type: "PUBLIC KEY", Bytes: pubDER})
 	pubFile.Close()
 
-	signer, err := jwt.NewRSASigner(privPath, pubPath)
+	signer, err := jwt.NewRSASigner(privPath, pubPath, noOpBlacklist{})
 	if err != nil {
 		t.Fatalf("new signer: %v", err)
 	}

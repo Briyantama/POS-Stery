@@ -20,14 +20,12 @@ func NewTokenBlacklist(client *redis.Client) *TokenBlacklist {
 	return &TokenBlacklist{client: client}
 }
 
-func (b *TokenBlacklist) Blacklist(token string) error {
-	key := blacklistKey(token)
-	return b.client.Set(context.Background(), key, "1", blacklistTTL).Err()
+func (b *TokenBlacklist) Blacklist(ctx context.Context, jti string) error {
+	return b.client.Set(ctx, blacklistKey(jti), "1", blacklistTTL).Err()
 }
 
-func (b *TokenBlacklist) IsBlacklisted(token string) (bool, error) {
-	key := blacklistKey(token)
-	err := b.client.Get(context.Background(), key).Err()
+func (b *TokenBlacklist) IsBlacklisted(ctx context.Context, jti string) (bool, error) {
+	err := b.client.Get(ctx, blacklistKey(jti)).Err()
 	if err == redis.Nil {
 		return false, nil
 	}

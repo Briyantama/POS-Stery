@@ -1,19 +1,22 @@
 package application
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // TokenSigner issues and validates RS256 JWTs.
 type TokenSigner interface {
 	Issue(claims TokenClaims) (token string, expiresAt time.Time, err error)
 	Verify(token string) (*TokenClaims, error)
-	Blacklist(token string) error
-	IsBlacklisted(token string) (bool, error)
+	Blacklist(ctx context.Context, jti string) error
+	IsBlacklisted(ctx context.Context, jti string) (bool, error)
 }
 
-// BlacklistStore persists revoked tokens (Redis implementation).
+// BlacklistStore persists revoked JTIs in Redis.
 type BlacklistStore interface {
-	Blacklist(token string) error
-	IsBlacklisted(token string) (bool, error)
+	Blacklist(ctx context.Context, jti string) error
+	IsBlacklisted(ctx context.Context, jti string) (bool, error)
 }
 
 // TokenClaims is the set of claims embedded in every JWT.

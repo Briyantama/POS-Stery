@@ -35,7 +35,7 @@ func (h *ValidateHandler) Handle(ctx context.Context, cmd ValidateCommand) (*Val
 		return &ValidateResult{Valid: false}, nil
 	}
 
-	blacklisted, err := h.signer.IsBlacklisted(claims.JTI)
+	blacklisted, err := h.signer.IsBlacklisted(ctx, claims.JTI)
 	if err != nil {
 		return nil, fmt.Errorf("check blacklist: %w", err)
 	}
