@@ -37,7 +37,7 @@ func (h *LogoutHandler) Handle(ctx context.Context, cmd LogoutCommand) error {
 	if err != nil {
 		return fmt.Errorf("%w: invalid token", sherrors.ErrUnauthenticated)
 	}
-	if err := h.signer.Blacklist(claims.JTI); err != nil {
+	if err := h.signer.Blacklist(ctx, claims.JTI); err != nil {
 		h.log.Warn("failed to blacklist access token on logout", zap.String("jti", claims.JTI), zap.Error(err))
 	}
 	if cmd.RefreshToken != "" {

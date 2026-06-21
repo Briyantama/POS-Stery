@@ -50,8 +50,8 @@ func (s *stubSigner) Issue(claims application.TokenClaims) (string, time.Time, e
 func (s *stubSigner) Verify(_ string) (*application.TokenClaims, error) {
 	return &application.TokenClaims{JTI: uuid.New().String()}, nil
 }
-func (s *stubSigner) Blacklist(_ string) error             { return nil }
-func (s *stubSigner) IsBlacklisted(_ string) (bool, error) { return false, nil }
+func (s *stubSigner) Blacklist(_ context.Context, _ string) error             { return nil }
+func (s *stubSigner) IsBlacklisted(_ context.Context, _ string) (bool, error) { return false, nil }
 
 // ---- helpers ----
 

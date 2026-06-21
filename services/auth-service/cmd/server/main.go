@@ -67,13 +67,12 @@ func run() error {
 	if privateKeyPath == "" || publicKeyPath == "" {
 		return fmt.Errorf("JWT_RS256_PRIVATE_KEY_PATH and JWT_RS256_PUBLIC_KEY_PATH must be set")
 	}
-	signer, err := jwt.NewRSASigner(privateKeyPath, publicKeyPath)
+	blacklist := redisstore.NewTokenBlacklist(redisClient)
+
+	signer, err := jwt.NewRSASigner(privateKeyPath, publicKeyPath, blacklist)
 	if err != nil {
 		return fmt.Errorf("jwt signer: %w", err)
 	}
-
-	blacklist := redisstore.NewTokenBlacklist(redisClient)
-	signer.SetBlacklistStore(blacklist)
 
 	// Database pool
 	pool, err := database.NewPool(context.Background(), cfg.DB)

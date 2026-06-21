@@ -95,6 +95,18 @@ func (r *stubRefreshTokenRepo) ListActiveSessions(_ context.Context, userID, ten
 	return result, nil
 }
 
+func (r *stubRefreshTokenRepo) Rotate(_ context.Context, oldID uuid.UUID, newRT *domain.RefreshToken) error {
+	r.tokens[newRT.TokenHash] = newRT
+	r.byID[newRT.ID] = newRT
+	r.revokedIDs = append(r.revokedIDs, oldID)
+	if rt, ok := r.byID[oldID]; ok {
+		now := time.Now()
+		rt.RevokedAt = &now
+		rt.ReplacedBy = &newRT.ID
+	}
+	return nil
+}
+
 func (r *stubRefreshTokenRepo) RevokeAllForUser(_ context.Context, userID, tenantID uuid.UUID) error {
 	r.allRevoked = true
 	for _, rt := range r.tokens {
@@ -126,8 +138,8 @@ func (s *stubSignerWithClaims) Verify(_ string) (*application.TokenClaims, error
 	}, nil
 }
 
-func (s *stubSignerWithClaims) Blacklist(_ string) error          { return nil }
-func (s *stubSignerWithClaims) IsBlacklisted(_ string) (bool, error) { return false, nil }
+func (s *stubSignerWithClaims) Blacklist(_ context.Context, _ string) error             { return nil }
+func (s *stubSignerWithClaims) IsBlacklisted(_ context.Context, _ string) (bool, error) { return false, nil }
 
 // ---- helpers ----
 
@@ -367,5 +379,5 @@ func (s *stubFailSigner) Issue(claims application.TokenClaims) (string, time.Tim
 func (s *stubFailSigner) Verify(_ string) (*application.TokenClaims, error) {
 	return nil, errors.New("invalid token")
 }
-func (s *stubFailSigner) Blacklist(_ string) error             { return nil }
-func (s *stubFailSigner) IsBlacklisted(_ string) (bool, error) { return false, nil }
+func (s *stubFailSigner) Blacklist(_ context.Context, _ string) error             { return nil }
+func (s *stubFailSigner) IsBlacklisted(_ context.Context, _ string) (bool, error) { return false, nil }

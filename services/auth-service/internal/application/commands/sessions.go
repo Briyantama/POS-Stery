@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -68,8 +69,21 @@ func (h *ListSessionsHandler) Handle(ctx context.Context, q ListSessionsQuery) (
 			IssuedAt:  t.IssuedAt,
 			ExpiresAt: t.ExpiresAt,
 			UserAgent: t.UserAgent,
-			IPAddress: t.IPAddress,
+			IPAddress: maskIP(t.IPAddress),
 		}
 	}
 	return &ListSessionsResult{Sessions: sessions}, nil
+}
+
+// maskIP obscures the last octet of an IPv4 address or the last segment of
+// an IPv6 address so that IP data is not leaked to the session listing caller.
+func maskIP(ip string) string {
+	parts := strings.Split(ip, ".")
+	if len(parts) == 4 {
+		return parts[0] + "." + parts[1] + "." + parts[2] + ".xxx"
+	}
+	if idx := strings.LastIndex(ip, ":"); idx > 0 {
+		return ip[:idx] + ":****"
+	}
+	return ip
 }

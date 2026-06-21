@@ -110,13 +110,8 @@ func (h *RefreshHandler) Handle(ctx context.Context, cmd RefreshCommand) (*Refre
 		UserAgent: cmd.UserAgent,
 		IPAddress: cmd.IPAddress,
 	}
-	if err := h.refreshRepo.Create(ctx, newRT); err != nil {
-		return nil, fmt.Errorf("store new refresh token: %w", err)
-	}
-
-	// Revoke old token, point replaced_by to the new one.
-	if err := h.refreshRepo.Revoke(ctx, existing.ID, &newRTID); err != nil {
-		return nil, fmt.Errorf("revoke old refresh token: %w", err)
+	if err := h.refreshRepo.Rotate(ctx, existing.ID, newRT); err != nil {
+		return nil, fmt.Errorf("rotate refresh token: %w", err)
 	}
 
 	claims := application.TokenClaims{

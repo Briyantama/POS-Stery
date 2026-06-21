@@ -195,7 +195,7 @@ func (q *Queries) RevokeFamilyTokens(ctx context.Context, familyID uuid.UUID) er
 const revokeRefreshToken = `-- name: RevokeRefreshToken :exec
 UPDATE auth.refresh_tokens
 SET revoked_at = NOW(), replaced_by = $2, updated_at = NOW()
-WHERE id = $1
+WHERE id = $1 AND revoked_at IS NULL
 `
 
 type RevokeRefreshTokenParams struct {

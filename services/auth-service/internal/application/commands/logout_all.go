@@ -39,7 +39,7 @@ func (h *LogoutAllHandler) Handle(ctx context.Context, cmd LogoutAllCommand) err
 	}
 
 	// Blacklist current access token by JTI.
-	if err := h.signer.Blacklist(claims.JTI); err != nil {
+	if err := h.signer.Blacklist(ctx, claims.JTI); err != nil {
 		h.log.Warn("failed to blacklist access token on logout-all", zap.String("jti", claims.JTI), zap.Error(err))
 	}
 

@@ -13,6 +13,38 @@ import (
 	"github.com/pos-stery/pos-stery/services/auth-service/internal/infrastructure/postgres/db"
 )
 
+func (r *RefreshTokenRepository) Rotate(ctx context.Context, oldID uuid.UUID, newRT *domain.RefreshToken) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin rotation transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	q := db.New(tx)
+
+	if _, err := q.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
+		ID:        newRT.ID,
+		UserID:    newRT.UserID,
+		TenantID:  newRT.TenantID,
+		FamilyID:  newRT.FamilyID,
+		TokenHash: newRT.TokenHash,
+		ExpiresAt: newRT.ExpiresAt,
+		UserAgent: newRT.UserAgent,
+		IpAddress: newRT.IPAddress,
+	}); err != nil {
+		return fmt.Errorf("create new refresh token in rotation: %w", err)
+	}
+
+	if err := q.RevokeRefreshToken(ctx, db.RevokeRefreshTokenParams{
+		ID:         oldID,
+		ReplacedBy: &newRT.ID,
+	}); err != nil {
+		return fmt.Errorf("revoke old refresh token in rotation: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
 // RefreshTokenRepository does NOT use WithTenantContext because token lookup
 // happens by cryptographic hash before the tenant is identified. Tenant
 // isolation is enforced at the application layer after the hash lookup.

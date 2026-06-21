@@ -25,6 +25,7 @@ type RefreshTokenRepository interface {
 	FindByHash(ctx context.Context, hash string) (*RefreshToken, error)
 	FindByID(ctx context.Context, id uuid.UUID) (*RefreshToken, error)
 	Revoke(ctx context.Context, id uuid.UUID, replacedBy *uuid.UUID) error
+	Rotate(ctx context.Context, oldID uuid.UUID, newRT *RefreshToken) error
 	RevokeFamily(ctx context.Context, familyID uuid.UUID) error
 	ListActiveSessions(ctx context.Context, userID, tenantID uuid.UUID) ([]*RefreshToken, error)
 	RevokeAllForUser(ctx context.Context, userID, tenantID uuid.UUID) error
