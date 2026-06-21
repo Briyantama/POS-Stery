@@ -2,7 +2,9 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	sherrors "github.com/pos-stery/pos-stery/services/_shared/errors"
@@ -19,8 +21,9 @@ type LoginCommand struct {
 }
 
 type LoginResult struct {
-	Token  string
-	Claims application.TokenClaims
+	Token     string
+	ExpiresAt time.Time
+	Claims    application.TokenClaims
 }
 
 type LoginHandler struct {
@@ -48,8 +51,11 @@ func (h *LoginHandler) Handle(ctx context.Context, cmd LoginCommand) (*LoginResu
 	}
 
 	user, err := h.users.FindByEmail(ctx, tenantID, cmd.Email)
-	if err != nil {
+	if errors.Is(err, sherrors.ErrNotFound) {
 		return nil, fmt.Errorf("%w: invalid credentials", sherrors.ErrUnauthenticated)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find user: %w", err)
 	}
 
 	if !user.IsActive {
@@ -86,10 +92,10 @@ func (h *LoginHandler) Handle(ctx context.Context, cmd LoginCommand) (*LoginResu
 		Email:    user.Email,
 	}
 
-	token, err := h.signer.Issue(claims)
+	token, expiresAt, err := h.signer.Issue(claims)
 	if err != nil {
 		return nil, fmt.Errorf("issue token: %w", err)
 	}
 
-	return &LoginResult{Token: token, Claims: claims}, nil
+	return &LoginResult{Token: token, ExpiresAt: expiresAt, Claims: claims}, nil
 }

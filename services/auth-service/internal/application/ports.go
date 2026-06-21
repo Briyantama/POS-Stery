@@ -1,8 +1,10 @@
 package application
 
+import "time"
+
 // TokenSigner issues and validates RS256 JWTs.
 type TokenSigner interface {
-	Issue(claims TokenClaims) (token string, err error)
+	Issue(claims TokenClaims) (token string, expiresAt time.Time, err error)
 	Verify(token string) (*TokenClaims, error)
 	Blacklist(token string) error
 	IsBlacklisted(token string) (bool, error)

@@ -95,7 +95,7 @@ func run() error {
 		ServiceTokenSecret: cfg.ServiceToken,
 	}, logger)
 
-	authv1.RegisterAuthServiceServer(grpcSrv, grpcimpl.NewAuthServiceServer(loginHandler, validateHandler))
+	authv1.RegisterAuthServiceServer(grpcSrv, grpcimpl.NewAuthServiceServer(loginHandler, validateHandler, signer))
 
 	logger.Sugar().Infof("auth-service listening on :%d", cfg.GRPC.Port)
 

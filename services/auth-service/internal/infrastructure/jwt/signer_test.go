@@ -55,12 +55,15 @@ func TestRSASigner_IssueAndVerify(t *testing.T) {
 		Email:    "cashier@example.com",
 	}
 
-	token, err := s.Issue(claims)
+	token, expiresAt, err := s.Issue(claims)
 	if err != nil {
 		t.Fatalf("issue: %v", err)
 	}
 	if token == "" {
 		t.Fatal("token must not be empty")
+	}
+	if expiresAt.IsZero() {
+		t.Fatal("expiresAt must not be zero")
 	}
 
 	got, err := s.Verify(token)
@@ -104,7 +107,7 @@ func TestRSASigner_AdminTokenHasNoStore(t *testing.T) {
 		Email:    "admin@example.com",
 	}
 
-	token, err := s.Issue(claims)
+	token, _, err := s.Issue(claims)
 	if err != nil {
 		t.Fatalf("issue: %v", err)
 	}

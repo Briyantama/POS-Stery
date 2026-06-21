@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -41,9 +42,9 @@ func (s *stubStoreRepo) ExistsInTenant(_ context.Context, _ domain.TenantID, _ d
 
 type stubSigner struct{ issued string }
 
-func (s *stubSigner) Issue(claims application.TokenClaims) (string, error) {
+func (s *stubSigner) Issue(claims application.TokenClaims) (string, time.Time, error) {
 	s.issued = "tok:" + claims.Role
-	return s.issued, nil
+	return s.issued, time.Now().Add(time.Hour), nil
 }
 
 func (s *stubSigner) Verify(_ string) (*application.TokenClaims, error) { return nil, nil }
@@ -129,6 +130,27 @@ func TestLoginHandler_UserNotFound(t *testing.T) {
 	})
 	if !errors.Is(err, sherrors.ErrUnauthenticated) {
 		t.Fatalf("want ErrUnauthenticated, got %v", err)
+	}
+}
+
+func TestLoginHandler_RepoInfraError(t *testing.T) {
+	dbErr := errors.New("connection refused")
+	h := commands.NewLoginHandler(
+		&stubUserRepo{err: dbErr},
+		&stubStoreRepo{},
+		&stubSigner{},
+	)
+
+	_, err := h.Handle(context.Background(), commands.LoginCommand{
+		TenantID: validTenant(),
+		Email:    "a@b.com",
+		Password: "secret",
+	})
+	if errors.Is(err, sherrors.ErrUnauthenticated) {
+		t.Fatal("infra error must not be mapped to ErrUnauthenticated")
+	}
+	if !errors.Is(err, dbErr) {
+		t.Fatalf("want wrapped dbErr, got %v", err)
 	}
 }
 

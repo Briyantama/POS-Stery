@@ -2,9 +2,11 @@ package grpc
 
 import (
 	"context"
+	"fmt"
 
 	authv1 "github.com/pos-stery/pos-stery/gen/go/pos/auth/v1"
 	sherrors "github.com/pos-stery/pos-stery/services/_shared/errors"
+	"github.com/pos-stery/pos-stery/services/auth-service/internal/application"
 	"github.com/pos-stery/pos-stery/services/auth-service/internal/application/commands"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -13,13 +15,15 @@ type AuthServiceServer struct {
 	authv1.UnimplementedAuthServiceServer
 	login    *commands.LoginHandler
 	validate *commands.ValidateHandler
+	signer   application.TokenSigner
 }
 
 func NewAuthServiceServer(
 	login *commands.LoginHandler,
 	validate *commands.ValidateHandler,
+	signer application.TokenSigner,
 ) *AuthServiceServer {
-	return &AuthServiceServer{login: login, validate: validate}
+	return &AuthServiceServer{login: login, validate: validate, signer: signer}
 }
 
 func (s *AuthServiceServer) Login(ctx context.Context, req *authv1.LoginRequest) (*authv1.LoginResponse, error) {
@@ -35,7 +39,7 @@ func (s *AuthServiceServer) Login(ctx context.Context, req *authv1.LoginRequest)
 
 	return &authv1.LoginResponse{
 		Token:     result.Token,
-		ExpiresAt: timestamppb.Now(),
+		ExpiresAt: timestamppb.New(result.ExpiresAt),
 		Claims: &authv1.UserClaims{
 			UserId:   result.Claims.UserID,
 			TenantId: result.Claims.TenantID,
@@ -65,11 +69,15 @@ func (s *AuthServiceServer) Validate(ctx context.Context, req *authv1.ValidateRe
 	return resp, nil
 }
 
-func (s *AuthServiceServer) Logout(ctx context.Context, req *authv1.LogoutRequest) (*authv1.LogoutResponse, error) {
+func (s *AuthServiceServer) Logout(_ context.Context, req *authv1.LogoutRequest) (*authv1.LogoutResponse, error) {
 	if req.Token == "" {
 		return &authv1.LogoutResponse{Success: false}, nil
 	}
-	// Token blacklisting is handled by the signer's Blacklist method
-	// In production, wire this to the LoginHandler's signer
+	if _, err := s.signer.Verify(req.Token); err != nil {
+		return nil, sherrors.ToGRPCStatus(fmt.Errorf("%w: %v", sherrors.ErrUnauthenticated, err))
+	}
+	if err := s.signer.Blacklist(req.Token); err != nil {
+		return nil, sherrors.ToGRPCStatus(fmt.Errorf("blacklist token: %w", err))
+	}
 	return &authv1.LogoutResponse{Success: true}, nil
 }

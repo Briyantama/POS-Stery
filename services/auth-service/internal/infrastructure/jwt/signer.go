@@ -48,13 +48,14 @@ func NewRSASigner(privateKeyPath, publicKeyPath string) (*RSASigner, error) {
 	return &RSASigner{privateKey: privKey, publicKey: pubKey}, nil
 }
 
-func (s *RSASigner) Issue(claims application.TokenClaims) (string, error) {
+func (s *RSASigner) Issue(claims application.TokenClaims) (string, time.Time, error) {
 	now := time.Now()
+	expiresAt := now.Add(tokenTTL)
 	jwtClaims := posClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   claims.UserID,
 			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(tokenTTL)),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
 		},
 		TenantID: claims.TenantID,
 		StoreID:  claims.StoreID,
@@ -63,7 +64,8 @@ func (s *RSASigner) Issue(claims application.TokenClaims) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwtClaims)
-	return token.SignedString(s.privateKey)
+	signed, err := token.SignedString(s.privateKey)
+	return signed, expiresAt, err
 }
 
 func (s *RSASigner) Verify(tokenStr string) (*application.TokenClaims, error) {
