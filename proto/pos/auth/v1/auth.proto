@@ -31,10 +31,11 @@ service AuthService {
 }
 
 message LoginRequest {
-  string email    = 1;
-  string password = 2;
+  string tenant_id = 1;
+  string email     = 2;
+  string password  = 3;
   // store_id is required for cashier role; omit for admin login
-  string store_id = 3;
+  string store_id  = 4;
 }
 
 message LoginResponse {

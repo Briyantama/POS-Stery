@@ -169,7 +169,7 @@ func (h *CreateSaleHandler) Handle(ctx context.Context, cmd CreateSaleCommand) (
 	}
 
 	for _, item := range cmd.Items {
-		if err := h.inventory.DeductStock(ctx, cmd.TenantID, cmd.StoreID, item.ProductID, int64(item.Quantity), ""); err != nil {
+		if err := h.inventory.DeductStock(ctx, cmd.TenantID, cmd.StoreID, item.ProductID, int64(item.Quantity), saleID.String()); err != nil {
 			compensate()
 			return nil, fmt.Errorf("deduct stock for product %s: %w", item.ProductID, err)
 		}
