@@ -128,6 +128,14 @@ func TestUpdateStock_MissingProductID(t *testing.T) {
 	}
 }
 
+func TestUpdateStock_ZeroDelta(t *testing.T) {
+	cmd := validUpdateCmd(uuid.New(), uuid.New(), uuid.New(), 0)
+	_, err := commands.NewUpdateStockHandler(&stubStockRepo{}, &stubThresholdRepo{}, &stubInvPublisher{}).Handle(context.Background(), cmd)
+	if !errors.Is(err, sherrors.ErrInvalidArgument) {
+		t.Fatalf("want ErrInvalidArgument for zero delta, got %v", err)
+	}
+}
+
 func TestUpdateStock_GetItemError(t *testing.T) {
 	repo := &stubStockRepo{getErr: errors.New("db down")}
 	cmd := validUpdateCmd(uuid.New(), uuid.New(), uuid.New(), -3)

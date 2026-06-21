@@ -62,6 +62,9 @@ func (h *UpdateStockHandler) Handle(ctx context.Context, cmd UpdateStockCommand)
 	if cmd.ProductID == uuid.Nil {
 		return UpdateStockResult{}, fmt.Errorf("productID required: %w", sherrors.ErrInvalidArgument)
 	}
+	if cmd.Delta == 0 {
+		return UpdateStockResult{}, fmt.Errorf("delta must be non-zero: %w", sherrors.ErrInvalidArgument)
+	}
 
 	// 1. Load current quantity to enforce the no-negative rule before touching the DB.
 	current, err := h.stockRepo.GetItem(ctx, cmd.TenantID, cmd.StoreID, cmd.ProductID)

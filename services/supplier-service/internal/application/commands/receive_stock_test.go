@@ -136,6 +136,32 @@ func TestReceiveStock_EmptyItems(t *testing.T) {
 	}
 }
 
+func TestReceiveStock_NilProductID(t *testing.T) {
+	cmd := commands.ReceiveStockCommand{
+		TenantID:        uuid.New(),
+		StoreID:         uuid.New(),
+		PurchaseOrderID: uuid.New(),
+		ItemsReceived:   []commands.ReceivedLineItem{{ProductID: uuid.Nil, QuantityReceived: 5}},
+	}
+	_, err := newReceiveHandler(&stubPORepo{}, &stubInventoryPort{}, &stubSupplierPublisher{}).Handle(context.Background(), cmd)
+	if !errors.Is(err, sherrors.ErrInvalidArgument) {
+		t.Fatalf("want ErrInvalidArgument for nil product_id, got %v", err)
+	}
+}
+
+func TestReceiveStock_ZeroQuantity(t *testing.T) {
+	cmd := commands.ReceiveStockCommand{
+		TenantID:        uuid.New(),
+		StoreID:         uuid.New(),
+		PurchaseOrderID: uuid.New(),
+		ItemsReceived:   []commands.ReceivedLineItem{{ProductID: uuid.New(), QuantityReceived: 0}},
+	}
+	_, err := newReceiveHandler(&stubPORepo{}, &stubInventoryPort{}, &stubSupplierPublisher{}).Handle(context.Background(), cmd)
+	if !errors.Is(err, sherrors.ErrInvalidArgument) {
+		t.Fatalf("want ErrInvalidArgument for zero quantity, got %v", err)
+	}
+}
+
 func TestReceiveStock_AlreadyReceivedOrder(t *testing.T) {
 	tenantID, storeID, productID := uuid.New(), uuid.New(), uuid.New()
 	order := pendingOrder(tenantID, storeID, productID, 10)

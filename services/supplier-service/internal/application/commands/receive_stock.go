@@ -63,6 +63,16 @@ func (h *ReceiveStockHandler) Handle(ctx context.Context, cmd ReceiveStockComman
 		return nil, fmt.Errorf("at least one received item required: %w", sherrors.ErrInvalidArgument)
 	}
 
+	// Validate all line items before any IO.
+	for _, line := range cmd.ItemsReceived {
+		if line.ProductID == uuid.Nil {
+			return nil, fmt.Errorf("received item product_id required: %w", sherrors.ErrInvalidArgument)
+		}
+		if line.QuantityReceived <= 0 {
+			return nil, fmt.Errorf("received quantity must be > 0: %w", sherrors.ErrInvalidArgument)
+		}
+	}
+
 	// Load the purchase order to validate ownership and current state.
 	order, err := h.orderRepo.Get(ctx, cmd.TenantID, cmd.StoreID, cmd.PurchaseOrderID)
 	if err != nil {
@@ -79,12 +89,6 @@ func (h *ReceiveStockHandler) Handle(ctx context.Context, cmd ReceiveStockComman
 	// Build a map of received quantities keyed by product ID for easy lookup.
 	receivedMap := make(map[uuid.UUID]int32, len(cmd.ItemsReceived))
 	for _, line := range cmd.ItemsReceived {
-		if line.ProductID == uuid.Nil {
-			return nil, fmt.Errorf("received item product_id required: %w", sherrors.ErrInvalidArgument)
-		}
-		if line.QuantityReceived <= 0 {
-			return nil, fmt.Errorf("received quantity must be > 0: %w", sherrors.ErrInvalidArgument)
-		}
 		receivedMap[line.ProductID] = line.QuantityReceived
 	}
 

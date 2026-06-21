@@ -33,6 +33,9 @@ func NewCreateProductHandler(repo domain.ProductRepository) *CreateProductHandle
 
 // Handle validates the command, constructs a Product aggregate and persists it.
 func (h *CreateProductHandler) Handle(ctx context.Context, cmd CreateProductCommand) (*domain.Product, error) {
+	if cmd.TenantID == uuid.Nil {
+		return nil, fmt.Errorf("tenant_id is required: %w", sherrors.ErrInvalidArgument)
+	}
 	if cmd.Name == "" {
 		return nil, fmt.Errorf("name is required: %w", sherrors.ErrInvalidArgument)
 	}

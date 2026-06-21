@@ -40,7 +40,8 @@ func (r *stubLoyaltyRepo) AddPoints(_ context.Context, _ uuid.UUID, entry *domai
 	if r.addPointsErr != nil {
 		return 0, r.addPointsErr
 	}
-	return entry.TotalPoints, nil
+	r.total += entry.Points
+	return r.total, nil
 }
 
 func (r *stubLoyaltyRepo) GetTotalPoints(_ context.Context, _, _ uuid.UUID) (int, error) {
@@ -90,6 +91,20 @@ func TestAddLoyaltyPoints_NegativePoints(t *testing.T) {
 
 	if !errors.Is(err, sherrors.ErrInvalidArgument) {
 		t.Fatalf("want ErrInvalidArgument for negative points, got %v", err)
+	}
+}
+
+func TestAddLoyaltyPoints_InactiveCustomer(t *testing.T) {
+	inactive := existingCustomer()
+	inactive.IsActive = false
+
+	_, err := commands.NewAddLoyaltyPointsHandler(
+		&stubFindCustomerRepo{customer: inactive},
+		&stubLoyaltyRepo{},
+	).Handle(context.Background(), validLoyaltyCmd(inactive, 50))
+
+	if !errors.Is(err, sherrors.ErrInvalidArgument) {
+		t.Fatalf("want ErrInvalidArgument for inactive customer, got %v", err)
 	}
 }
 

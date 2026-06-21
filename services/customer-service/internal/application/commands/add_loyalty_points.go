@@ -61,6 +61,9 @@ func (h *AddLoyaltyPointsHandler) Handle(ctx context.Context, cmd AddLoyaltyPoin
 	if err != nil {
 		return nil, fmt.Errorf("find customer: %w", err)
 	}
+	if !c.IsActive {
+		return nil, fmt.Errorf("customer is inactive: %w", sherrors.ErrInvalidArgument)
+	}
 
 	currentTotal, err := h.loyaltyRepo.GetTotalPoints(ctx, cmd.TenantID, cmd.CustomerID)
 	if err != nil {

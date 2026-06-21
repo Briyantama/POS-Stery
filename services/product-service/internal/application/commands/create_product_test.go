@@ -46,6 +46,16 @@ func validCreateProductCmd() commands.CreateProductCommand {
 
 // ── tests ──────────────────────────────────────────────────────────────────────
 
+func TestCreateProduct_MissingTenantID(t *testing.T) {
+	cmd := validCreateProductCmd()
+	cmd.TenantID = uuid.Nil
+
+	_, err := commands.NewCreateProductHandler(&stubProductRepo{}).Handle(context.Background(), cmd)
+	if !errors.Is(err, sherrors.ErrInvalidArgument) {
+		t.Fatalf("want ErrInvalidArgument for nil tenant_id, got %v", err)
+	}
+}
+
 func TestCreateProduct_MissingName(t *testing.T) {
 	cmd := validCreateProductCmd()
 	cmd.Name = ""
