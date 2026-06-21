@@ -13,6 +13,7 @@ import (
 	"github.com/pos-stery/pos-stery/services/_shared/server"
 	"github.com/pos-stery/pos-stery/services/customer-service/internal/application/commands"
 	"github.com/pos-stery/pos-stery/services/customer-service/internal/application/queries"
+	"github.com/pos-stery/pos-stery/services/customer-service/internal/infrastructure"
 	"github.com/pos-stery/pos-stery/services/customer-service/internal/infrastructure/postgres"
 	grpcimpl "github.com/pos-stery/pos-stery/services/customer-service/internal/interfaces/grpc"
 )
@@ -60,7 +61,7 @@ func run() error {
 	loyaltyRepo := postgres.NewLoyaltyRepository(pool)
 
 	// Wire application handlers
-	createHandler := commands.NewCreateCustomerHandler(customerRepo, js)
+	createHandler := commands.NewCreateCustomerHandler(customerRepo, infrastructure.NewNATSPublisher(js))
 	loyaltyHandler := commands.NewAddLoyaltyPointsHandler(customerRepo, loyaltyRepo)
 	queryHandler := queries.NewCustomerQueryHandler(customerRepo, loyaltyRepo)
 

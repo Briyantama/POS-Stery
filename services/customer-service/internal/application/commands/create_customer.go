@@ -5,9 +5,8 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/nats-io/nats.go"
 	sherrors "github.com/pos-stery/pos-stery/services/_shared/errors"
-	sharednats "github.com/pos-stery/pos-stery/services/_shared/nats"
+	"github.com/pos-stery/pos-stery/services/customer-service/internal/application"
 	"github.com/pos-stery/pos-stery/services/customer-service/internal/domain"
 )
 
@@ -19,23 +18,17 @@ type CreateCustomerCommand struct {
 	Email    string
 }
 
-// CustomerNewPayload is the event payload published on Customer.New.
-type CustomerNewPayload struct {
-	CustomerID string `json:"customer_id"`
-	TenantID   string `json:"tenant_id"`
-	Name       string `json:"name"`
-}
 
 // CreateCustomerHandler handles the CreateCustomerCommand.
 type CreateCustomerHandler struct {
-	repo domain.CustomerRepository
-	js   nats.JetStreamContext
+	repo      domain.CustomerRepository
+	publisher application.EventPublisher
 }
 
 // NewCreateCustomerHandler constructs a handler with the given repository and
-// JetStream context for publishing Customer.New events.
-func NewCreateCustomerHandler(repo domain.CustomerRepository, js nats.JetStreamContext) *CreateCustomerHandler {
-	return &CreateCustomerHandler{repo: repo, js: js}
+// event publisher.
+func NewCreateCustomerHandler(repo domain.CustomerRepository, publisher application.EventPublisher) *CreateCustomerHandler {
+	return &CreateCustomerHandler{repo: repo, publisher: publisher}
 }
 
 // Handle validates the command, persists the customer and publishes Customer.New.
@@ -57,18 +50,8 @@ func (h *CreateCustomerHandler) Handle(ctx context.Context, cmd CreateCustomerCo
 		return nil, fmt.Errorf("create customer: %w", err)
 	}
 
-	// Publish Customer.New event after successful persist.
-	payload := CustomerNewPayload{
-		CustomerID: c.ID.String(),
-		TenantID:   c.TenantID.String(),
-		Name:       c.Name,
-	}
-	if err := sharednats.Publish(h.js, sharednats.SubjectCustomerNew, c.TenantID.String(), "", payload); err != nil {
-		// Non-fatal: log would be better in production; here we return the
-		// customer but surface the publish error as a warning via the error.
-		// In practice, wire a logger and log.Warn instead of returning the error.
-		_ = err
-	}
+	// Publish Customer.New event; non-fatal on failure.
+	_ = h.publisher.PublishCustomerNew(ctx, c.ID.String(), c.TenantID.String(), c.Name)
 
 	return c, nil
 }
