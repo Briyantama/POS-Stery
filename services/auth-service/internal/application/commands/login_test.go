@@ -18,8 +18,10 @@ import (
 // ---- stubs ----
 
 type stubUserRepo struct {
-	user *domain.User
-	err  error
+	user           *domain.User
+	err            error
+	resolvedTenant domain.TenantID
+	resolveErr     error
 }
 
 func (s *stubUserRepo) FindByEmail(_ context.Context, _ domain.TenantID, _ string) (*domain.User, error) {
@@ -28,6 +30,10 @@ func (s *stubUserRepo) FindByEmail(_ context.Context, _ domain.TenantID, _ strin
 
 func (s *stubUserRepo) FindByID(_ context.Context, _ domain.TenantID, _ domain.UserID) (*domain.User, error) {
 	return s.user, s.err
+}
+
+func (s *stubUserRepo) ResolveTenantByEmail(_ context.Context, _ string) (domain.TenantID, error) {
+	return s.resolvedTenant, s.resolveErr
 }
 
 type stubStoreRepo struct{}
@@ -272,5 +278,40 @@ func TestLoginHandler_CashierSuccess(t *testing.T) {
 	}
 	if res.RefreshToken == "" {
 		t.Error("expected non-empty refresh token on cashier login")
+	}
+}
+
+// Public login (no tenant_id supplied) must resolve the tenant from the email
+// instead of hard-failing on an empty tenant_id.
+func TestLoginHandler_PublicLoginResolvesTenant(t *testing.T) {
+	user := adminUser(t)
+	repo := &stubUserRepo{user: user, resolvedTenant: user.TenantID}
+	h := newLoginHandler(repo, &stubStoreRepo{}, &stubSigner{})
+
+	res, err := h.Handle(context.Background(), commands.LoginCommand{
+		// No TenantID — exercises the public-login resolution path.
+		Email:    user.Email,
+		Password: "secret",
+	})
+	if err != nil {
+		t.Fatalf("public login should succeed via email tenant resolution, got %v", err)
+	}
+	if res.Claims.Role != "admin" {
+		t.Errorf("want role=admin, got %q", res.Claims.Role)
+	}
+}
+
+// Public login with an unknown/ambiguous email (resolver returns ErrNotFound)
+// must fail closed as invalid credentials, never leaking enumeration signal.
+func TestLoginHandler_PublicLoginUnknownEmail(t *testing.T) {
+	repo := &stubUserRepo{resolveErr: sherrors.ErrNotFound}
+	h := newLoginHandler(repo, &stubStoreRepo{}, &stubSigner{})
+
+	_, err := h.Handle(context.Background(), commands.LoginCommand{
+		Email:    "ghost@example.com",
+		Password: "secret",
+	})
+	if !errors.Is(err, sherrors.ErrUnauthenticated) {
+		t.Fatalf("unknown email on public login must map to ErrUnauthenticated, got %v", err)
 	}
 }

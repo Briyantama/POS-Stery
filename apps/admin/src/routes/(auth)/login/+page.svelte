@@ -1,7 +1,5 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { api, ApiError } from '$lib/api';
-  import { setSession } from '$lib/auth';
   import { Button, Input, LoginCard } from '@pos-stery/ui';
 
   let email    = $state('');
@@ -9,17 +7,27 @@
   let error    = $state('');
   let loading  = $state(false);
 
+  // Credentials are exchanged server-side (/auth/session), which validates the
+  // admin role and stores the JWT in an httpOnly cookie. The token never touches
+  // client JS.
   async function handleSubmit(e: Event) {
     e.preventDefault();
     error = '';
     loading = true;
     try {
-      const res = await api.post<{ token: string; role: string }>('/login', { email, password });
-      if (res.role !== 'admin') { error = 'Admin access only.'; return; }
-      setSession(res.token, res.role);
-      goto('/dashboard');
-    } catch (err) {
-      error = err instanceof ApiError ? err.message : 'Login failed.';
+      const res = await fetch('/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        error = data.message ?? 'Login failed.';
+        return;
+      }
+      await goto('/dashboard');
+    } catch {
+      error = 'Login failed.';
     } finally {
       loading = false;
     }

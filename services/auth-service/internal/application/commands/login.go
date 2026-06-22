@@ -54,9 +54,9 @@ func (h *LoginHandler) Handle(ctx context.Context, cmd LoginCommand) (*LoginResu
 		return nil, fmt.Errorf("%w: email and password required", sherrors.ErrInvalidArgument)
 	}
 
-	tenantID, err := uuid.Parse(cmd.TenantID)
+	tenantID, err := h.resolveTenantID(ctx, cmd)
 	if err != nil {
-		return nil, fmt.Errorf("%w: invalid tenant_id", sherrors.ErrInvalidArgument)
+		return nil, err
 	}
 
 	user, err := h.users.FindByEmail(ctx, tenantID, cmd.Email)
@@ -133,6 +133,27 @@ func (h *LoginHandler) Handle(ctx context.Context, cmd LoginCommand) (*LoginResu
 		ExpiresAt:    expiresAt,
 		Claims:       claims,
 	}, nil
+}
+
+// resolveTenantID determines the tenant for a login. An explicit tenant_id
+// (service-to-service callers) is honored as-is and stays backwards-compatible.
+// For public login the gateway cannot know the tenant pre-auth, so it is
+// resolved from the email; unknown or ambiguous emails fail closed as invalid
+// credentials to avoid tenant/user enumeration.
+func (h *LoginHandler) resolveTenantID(ctx context.Context, cmd LoginCommand) (uuid.UUID, error) {
+	if cmd.TenantID != "" {
+		parsed, err := uuid.Parse(cmd.TenantID)
+		if err != nil {
+			return uuid.Nil, fmt.Errorf("%w: invalid tenant_id", sherrors.ErrInvalidArgument)
+		}
+		return parsed, nil
+	}
+
+	tenantID, err := h.users.ResolveTenantByEmail(ctx, cmd.Email)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("%w: invalid credentials", sherrors.ErrUnauthenticated)
+	}
+	return tenantID, nil
 }
 
 // generateRefreshToken creates a cryptographically secure random token.

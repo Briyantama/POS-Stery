@@ -1,10 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { getToken } from '$lib/auth';
-  import { api, ApiError } from '$lib/api';
-  import { Alert, Badge, LoadingSpinner } from '@pos-stery/ui';
+  import { onMount } from "svelte";
+  import { getToken } from "$lib/auth";
+  import { api, ApiError } from "$lib/api";
+  import { Alert, Badge, LoadingSpinner } from "@pos-stery/ui";
 
-  interface TopProduct { name: string; quantity: number; revenue?: number; }
+  interface TopProduct {
+    name: string;
+    quantity: number;
+    revenue?: number;
+  }
   interface Report {
     total_sales: number;
     total_revenue: number;
@@ -15,30 +19,33 @@
   }
 
   let loading = $state(true);
-  let error   = $state('');
-  let report: Report | null = $state(null);
+  let error = $state("");
+  let report = $state<Report | null>(null);
 
   const today = new Date().toISOString().slice(0, 10);
 
   onMount(async () => {
     try {
-      report = await api.get<Report>(`/sales/report?date=${today}`, getToken() ?? undefined);
+      report = await api.get<Report>(
+        `/sales/report?date=${today}`,
+        getToken() ?? undefined,
+      );
     } catch (err) {
-      error = err instanceof ApiError ? err.message : 'Failed to load report.';
+      error = err instanceof ApiError ? err.message : "Failed to load report.";
     } finally {
       loading = false;
     }
   });
 
   function fmtIDR(n: number) {
-    return 'IDR ' + n.toLocaleString('id-ID');
+    return "IDR " + n.toLocaleString("id-ID");
   }
 
   /* Mini sparkline — 7 synthetic daily bars derived from total (demo shape) */
   function sparkBars(total: number): number[] {
     if (!total) return [0, 0, 0, 0, 0, 0, 0];
-    const weights = [0.09, 0.11, 0.14, 0.13, 0.17, 0.16, 0.20];
-    return weights.map(w => Math.round(w * total));
+    const weights = [0.09, 0.11, 0.14, 0.13, 0.17, 0.16, 0.2];
+    return weights.map((w) => Math.round(w * total));
   }
 
   const bars = $derived(sparkBars(report?.total_revenue ?? 0));
@@ -47,17 +54,17 @@
   /* Payment mix totals — fallback to even split if API doesn't return them */
   const payMix = $derived(
     report?.payment_mix ?? {
-      cash:  Math.round((report?.total_revenue ?? 0) * 0.55),
-      qris:  Math.round((report?.total_revenue ?? 0) * 0.30),
+      cash: Math.round((report?.total_revenue ?? 0) * 0.55),
+      qris: Math.round((report?.total_revenue ?? 0) * 0.3),
       debit: Math.round((report?.total_revenue ?? 0) * 0.15),
-    }
+    },
   );
 
   const drawer = $derived(
     report?.cash_drawer ?? {
       opening_float: 500_000,
       expected: 500_000 + (payMix.cash ?? 0),
-    }
+    },
   );
 </script>
 
@@ -121,9 +128,14 @@
           <dd class="ops-amount">{fmtIDR(drawer.expected)}</dd>
         </div>
         {#if drawer.actual != null}
-          <div class="ops-entry ops-entry--balance" class:ops-entry--ok={drawer.actual >= drawer.expected}>
+          <div
+            class="ops-entry ops-entry--balance"
+            class:ops-entry--ok={drawer.actual >= drawer.expected}
+          >
             <dt>Balance</dt>
-            <dd class="ops-amount">{fmtIDR(drawer.actual - drawer.expected)}</dd>
+            <dd class="ops-amount">
+              {fmtIDR(drawer.actual - drawer.expected)}
+            </dd>
           </div>
         {/if}
       </dl>
@@ -141,7 +153,7 @@
           {#each report.top_products.slice(0, 5) as product, i}
             <li class="ledger-row">
               <span class="ledger-rank" class:ledger-rank--gold={i === 0}>
-                #{String(i + 1).padStart(2, '0')}
+                #{String(i + 1).padStart(2, "0")}
               </span>
               <span class="ledger-name">{product.name}</span>
               <span class="ledger-qty">{product.quantity} sold</span>
@@ -174,7 +186,11 @@
 {/if}
 
 <style>
-  .center { display: flex; justify-content: center; padding: var(--space-12, 3rem); }
+  .center {
+    display: flex;
+    justify-content: center;
+    padding: var(--space-12, 3rem);
+  }
 
   /* ── Hero revenue panel ── */
   .hero-panel {
@@ -198,7 +214,11 @@
     padding: var(--space-6, 1.5rem);
     gap: var(--space-6, 1.5rem);
   }
-  .hero-left { display: flex; flex-direction: column; gap: var(--space-2, 0.5rem); }
+  .hero-left {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2, 0.5rem);
+  }
   .hero-label {
     font-size: var(--text-xs, 0.75rem);
     font-weight: var(--weight-medium, 500);
@@ -215,7 +235,10 @@
     letter-spacing: var(--tracking-tight, -0.02em);
     font-variant-numeric: tabular-nums;
   }
-  .hero-sub { font-size: var(--text-sm, 0.875rem); color: var(--color-muted, #7a7060); }
+  .hero-sub {
+    font-size: var(--text-sm, 0.875rem);
+    color: var(--color-muted, #7a7060);
+  }
 
   /* Mini 7-bar sparkline */
   .hero-spark {
@@ -232,7 +255,9 @@
     border-radius: 2px 2px 0 0;
     transition: height 300ms ease;
   }
-  .spark-bar--last { background: var(--color-primary, #1b3b8f); }
+  .spark-bar--last {
+    background: var(--color-primary, #1b3b8f);
+  }
 
   /* ── Operations row ── */
   .ops-row {
@@ -241,7 +266,11 @@
     gap: var(--space-5, 1.25rem);
     margin-bottom: var(--space-5, 1.25rem);
   }
-  @media (max-width: 640px) { .ops-row { grid-template-columns: 1fr; } }
+  @media (max-width: 640px) {
+    .ops-row {
+      grid-template-columns: 1fr;
+    }
+  }
 
   .ops-card {
     background: var(--color-surface, #fff);
@@ -257,7 +286,12 @@
     text-transform: uppercase;
     letter-spacing: var(--tracking-wide, 0.08em);
   }
-  .ops-dl { margin: 0; display: flex; flex-direction: column; gap: var(--space-2, 0.5rem); }
+  .ops-dl {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2, 0.5rem);
+  }
   .ops-entry {
     display: flex;
     justify-content: space-between;
@@ -266,16 +300,24 @@
     padding: var(--space-2, 0.5rem) 0;
     border-bottom: 1px solid var(--color-border, #e2dbcd);
   }
-  .ops-entry:last-child { border-bottom: none; }
-  .ops-entry dt { color: var(--color-muted, #7a7060); }
+  .ops-entry:last-child {
+    border-bottom: none;
+  }
+  .ops-entry dt {
+    color: var(--color-muted, #7a7060);
+  }
   .ops-amount {
     font-family: var(--font-mono);
     font-weight: var(--weight-semibold, 600);
     font-variant-numeric: tabular-nums;
     color: var(--color-text, #1a1611);
   }
-  .ops-entry--balance .ops-amount { color: var(--color-muted, #7a7060); }
-  .ops-entry--ok .ops-amount { color: var(--color-success, #2e7d52); }
+  .ops-entry--balance .ops-amount {
+    color: var(--color-muted, #7a7060);
+  }
+  .ops-entry--ok .ops-amount {
+    color: var(--color-success, #2e7d52);
+  }
 
   /* ── Bottom row: ledger cards ── */
   .bottom-row {
@@ -283,7 +325,11 @@
     grid-template-columns: 1fr 1fr;
     gap: var(--space-5, 1.25rem);
   }
-  @media (max-width: 768px) { .bottom-row { grid-template-columns: 1fr; } }
+  @media (max-width: 768px) {
+    .bottom-row {
+      grid-template-columns: 1fr;
+    }
+  }
 
   .ledger-card {
     background: var(--color-surface, #fff);
@@ -302,7 +348,11 @@
     margin: 0;
   }
 
-  .ledger-list { list-style: none; margin: 0; padding: 0; }
+  .ledger-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
   .ledger-row {
     display: flex;
     align-items: center;
@@ -311,7 +361,9 @@
     border-bottom: 1px solid var(--color-border, #e2dbcd);
     font-size: var(--text-sm, 0.875rem);
   }
-  .ledger-row:last-child { border-bottom: none; }
+  .ledger-row:last-child {
+    border-bottom: none;
+  }
 
   .ledger-rank {
     font-family: var(--font-mono);
@@ -321,9 +373,15 @@
     flex-shrink: 0;
     font-variant-numeric: tabular-nums;
   }
-  .ledger-rank--gold { color: var(--color-accent, #e0992e); font-weight: var(--weight-bold, 700); }
+  .ledger-rank--gold {
+    color: var(--color-accent, #e0992e);
+    font-weight: var(--weight-bold, 700);
+  }
 
-  .ledger-name { flex: 1; color: var(--color-text, #1a1611); }
+  .ledger-name {
+    flex: 1;
+    color: var(--color-text, #1a1611);
+  }
   .ledger-sku {
     font-family: var(--font-mono);
     font-size: var(--text-xs, 0.75rem);

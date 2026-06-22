@@ -78,6 +78,22 @@ func (r *UserRepository) FindByID(ctx context.Context, tenantID domain.TenantID,
 	return u, err
 }
 
+// ResolveTenantByEmail resolves the tenant for a public login by email, before
+// any tenant context exists. It calls the SECURITY DEFINER function
+// auth.resolve_login_tenant, which bypasses RLS and returns a tenant only when
+// exactly one active user owns the email (NULL otherwise → ErrNotFound).
+func (r *UserRepository) ResolveTenantByEmail(ctx context.Context, email string) (domain.TenantID, error) {
+	const q = `SELECT COALESCE(auth.resolve_login_tenant($1), '00000000-0000-0000-0000-000000000000'::uuid)`
+	var tenantID uuid.UUID
+	if err := r.pool.QueryRow(ctx, q, email).Scan(&tenantID); err != nil {
+		return uuid.Nil, fmt.Errorf("resolve login tenant: %w", err)
+	}
+	if tenantID == uuid.Nil {
+		return uuid.Nil, sherrors.ErrNotFound
+	}
+	return tenantID, nil
+}
+
 func toUser(id, tenantID uuid.UUID, email, passwordHash, name string, isActive bool, createdAt, updatedAt time.Time, roleRows []db.GetUserRolesRow) *domain.User {
 	roles := make([]domain.UserRole, len(roleRows))
 	for i, r := range roleRows {

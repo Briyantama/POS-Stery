@@ -1,20 +1,15 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { getToken, clearSession, requireCashier } from '$lib/session';
-  import { api } from '$lib/api';
 
   interface Props { children: import('svelte').Snippet; }
   let { children }: Props = $props();
 
-  onMount(() => requireCashier());
-
+  // The cashier role is enforced server-side in hooks.server.ts; no client guard
+  // is needed here. Logout clears the httpOnly session via /auth/session.
   async function logout() {
-    const token = getToken();
-    if (token) await api.post('/logout', {}, token).catch(() => {});
-    clearSession();
-    goto('/login');
+    await fetch('/auth/session', { method: 'DELETE' }).catch(() => {});
+    await goto('/login');
   }
 </script>
 

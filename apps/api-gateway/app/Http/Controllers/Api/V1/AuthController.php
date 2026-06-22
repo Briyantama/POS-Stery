@@ -30,7 +30,10 @@ class AuthController extends Controller
 
     public function logout(Request $request): JsonResponse
     {
-        $this->auth->logout($request->auth_token ?? '');
+        $this->auth->logout(
+            $request->auth_token ?? '',
+            $request->input('refresh_token', '')
+        );
         return response()->json(['success' => true]);
     }
 }

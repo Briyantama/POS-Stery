@@ -40,9 +40,11 @@ Sprint 7 (CI + scripts)    ← all sprints
 Files to create (all independent, can be parallel):
 
 ### `.gitignore`
+
 Cover Go binaries, PHP vendor, Node modules, `.env`, `gen/` (proto output), IDE files, OS files.
 
 ### `deploy/docker/docker-compose.yml`
+
 Services: `postgres:16-alpine` (port 5432), `redis:7-alpine` (port 6379),
 `nats:2.10-alpine` with `nats.conf` mount (ports 4222, 8222),
 `jaegertracing/all-in-one:1.58` (ports 16686, 4317, 4318),
@@ -51,6 +53,7 @@ Single bridge network `pos-net`. Named volumes for postgres data and nats data.
 **No application services here** — services run via `go run` locally.
 
 ### `deploy/docker/init-postgres.sql`
+
 ```sql
 CREATE ROLE pos_admin WITH LOGIN PASSWORD '${POSTGRES_ADMIN_PASSWORD}' CREATEDB BYPASSRLS;
 CREATE ROLE pos_app   WITH LOGIN PASSWORD '${POSTGRES_APP_PASSWORD}';
@@ -63,6 +66,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 ```
 
 ### `deploy/docker/nats.conf`
+
 ```
 port: 4222
 http_port: 8222
@@ -82,6 +86,7 @@ accounts {
 Define the `POS_EVENTS` stream programmatically in `_shared/nats/streams.go` (not in the config file), so services self-register on startup.
 
 ### `.env.example`
+
 ```
 # Postgres
 POSTGRES_HOST=localhost
@@ -118,6 +123,7 @@ CUSTOMER_SERVICE_URL=http://localhost:8086
 ```
 
 ### `Makefile`
+
 See the Makefile Targets section below.
 
 ---
@@ -125,6 +131,7 @@ See the Makefile Targets section below.
 ## Sprint 1 — Proto Contracts
 
 ### `proto/buf.yaml`
+
 ```yaml
 version: v2
 modules:
@@ -139,6 +146,7 @@ deps:
 ```
 
 ### `proto/buf.gen.yaml`
+
 ```yaml
 version: v2
 managed:
@@ -196,18 +204,22 @@ Key fields per service (all request messages start with tenant_id + store_id):
 **customer.proto** — `CreateCustomer`, `GetCustomer`, `AddLoyaltyPoints(sale_id, points)`
 
 After writing all .proto files:
+
 ```bash
 cd proto && buf dep update && buf generate
 ```
 
 ### `gen/go/go.mod`
+
 ```
 module github.com/pos-stery/pos-stery/gen/go
 go 1.24
 ```
+
 Add generated proto dependencies after running `buf generate`.
 
 ### `go.work`
+
 ```
 go 1.24
 
@@ -230,9 +242,11 @@ use (
 Module path: `github.com/pos-stery/pos-stery/services/_shared`
 
 ### `database/pool.go`
+
 `NewPool(cfg Config) (*pgxpool.Pool, error)` — configures pgx pool, sets `default_transaction_isolation` to `read committed`.
 
 ### `database/tenant_context.go` ← CRITICAL
+
 ```go
 // WithTenantContext wraps fn in a transaction that sets app.tenant_id and
 // app.store_id as local parameters before execution. RLS policies depend on
@@ -240,15 +254,20 @@ Module path: `github.com/pos-stery/pos-stery/services/_shared`
 func WithTenantContext(ctx context.Context, pool *pgxpool.Pool,
     tenantID, storeID string, fn func(pgx.Tx) error) error
 ```
+
 The transaction executes:
+
 ```sql
 SET LOCAL app.tenant_id = '<tenantID>';
 SET LOCAL app.store_id  = '<storeID>';
 ```
+
 before calling `fn`. If `storeID` is empty (admin-level operations), set it to `''`.
 
 ### `middleware/grpc_interceptors.go`
+
 Unary and stream interceptors for:
+
 - **TenantEnforcer** — rejects requests where `tenant_id` field is empty or doesn't match the JWT claim extracted by the gateway.
 - **ServiceAuthValidator** — validates `X-Service-Token` HMAC-SHA256 header for service-to-service calls.
 - **RequestLogger** — zap structured logging with `tenant_id`, `store_id`, method, duration.
@@ -256,9 +275,11 @@ Unary and stream interceptors for:
 - **OtelTracer** — OpenTelemetry span creation.
 
 ### `nats/jetstream.go`
+
 `NewClient(url, password string) (nats.JetStreamContext, error)`
 
 ### `nats/event_envelope.go`
+
 ```go
 type EventEnvelope struct {
     EventType  string    `json:"event_type"`
@@ -268,16 +289,20 @@ type EventEnvelope struct {
     Payload    any       `json:"payload"`
 }
 ```
+
 All NATS publishes wrap their payload in `EventEnvelope`.
 
 ### `nats/streams.go`
+
 `EnsureStreams(js nats.JetStreamContext) error` — creates `POS_EVENTS` stream on startup if it doesn't exist.
 Subjects: `Product.LowStock`, `Sale.Completed`, `Inventory.Replenished`, `Customer.New`, `AI.OrderForecasted`.
 
 ### `server/grpc_server.go`
+
 `New(cfg Config, svc grpc.ServiceDesc, impl any) *grpc.Server` — builds a server with the standard interceptor chain from `middleware`.
 
 ### `server/shutdown.go`
+
 `GracefulShutdown(grpcSrv *grpc.Server, httpSrv *http.Server, timeout time.Duration)`
 
 ---
@@ -285,6 +310,7 @@ Subjects: `Product.LowStock`, `Sale.Completed`, `Inventory.Replenished`, `Custom
 ## Sprint 3 — Auth Service
 
 Migration `001_create_auth_schema.up.sql` must:
+
 1. `CREATE SCHEMA auth;`
 2. `GRANT USAGE ON SCHEMA auth TO pos_app;`
 3. Create tables: `tenants`, `stores`, `users`, `roles`, `permissions`, `user_roles`
@@ -297,6 +323,7 @@ Migration `001_create_auth_schema.up.sql` must:
 `jwt_signer.go` — RS256 signing with key loaded from `JWT_RS256_PRIVATE_KEY_PATH`. Issued claims: `sub` (user_id), `tid` (tenant_id), `sid` (store_id, empty for admin), `role` (admin|cashier|stock_manager), `exp`.
 
 `cmd/server/main.go` pattern for all services:
+
 ```go
 func main() {
     cfg := config.Load()
@@ -320,11 +347,13 @@ Apply the same pattern for each service. Key service-specific notes:
 ### inventory-service (4b — build before sales and supplier)
 
 `UpdateStockHandler` must enforce the no-negative rule before writing:
+
 ```go
 if item.Quantity + cmd.QuantityDelta < 0 {
     return ErrStockWouldGoNegative
 }
 ```
+
 After a successful update, check against threshold and publish `Product.LowStock` if `item.Quantity <= threshold.MinQuantity`.
 
 Migration must create `inventory.stock_thresholds(tenant_id, store_id, product_id, min_quantity)` with a unique index on `(tenant_id, store_id, product_id)`.
@@ -332,12 +361,14 @@ Migration must create `inventory.stock_thresholds(tenant_id, store_id, product_i
 ### sales-service (4c — depends on inventory running)
 
 `CreateSaleHandler` synchronous saga:
+
 ```
 1. call InventoryService.UpdateStock (quantity_delta: -qty) for each line item
 2. if all deductions succeed → write sale + sale_items + receipt to DB
 3. if DB write fails → for each deducted item, call InventoryService.UpdateStock (quantity_delta: +qty) to compensate
 4. publish Sale.Completed on success
 ```
+
 Receipt stored as `jsonb` snapshot: `{sale_id, tenant_id, store_id, items, total, discount, cashier_id, completed_at}`.
 
 `grpc_clients/inventory_client.go` — wraps `inventoryv1.InventoryServiceClient` with the service auth header injected.
@@ -355,6 +386,7 @@ cd apps && composer create-project laravel/laravel api-gateway
 ```
 
 ### Middleware chain (applied globally)
+
 ```php
 // routes/api.php middleware group order:
 // JwtValidation → TenantResolver → StoreResolver → CheckRole
@@ -367,6 +399,7 @@ cd apps && composer create-project laravel/laravel api-gateway
 `CheckRole.php` — middleware constructor takes `string ...$allowed` roles. Route groups use `->middleware('role:admin')` or `->middleware('role:cashier')`.
 
 ### gRPC client pattern
+
 ```php
 class BaseGrpcGatewayClient {
     // All clients call the grpc-gateway HTTP/JSON transcoding endpoint
@@ -379,6 +412,7 @@ class BaseGrpcGatewayClient {
 Each `*ServiceClient.php` extends `BaseGrpcGatewayClient` and wraps individual RPC methods. All calls automatically inject `tenant_id` and `store_id` from the current request.
 
 ### `routes/api.php` endpoints (PRD §11.2)
+
 ```
 POST   /api/login                  AuthController@login       (public)
 POST   /api/logout                 AuthController@logout      (jwt)
@@ -409,12 +443,13 @@ npx sv create cashier --template skeleton --types ts --no-add-ons
 ```
 
 ### `hooks.server.ts` pattern (both apps)
+
 ```ts
 export const handle: Handle = async ({ event, resolve }) => {
-  const token = event.cookies.get('pos_token');
-  if (!token) return redirect(302, '/login');
-  const claims = verifyJwt(token);   // verify RS256 with PUBLIC_KEY env
-  if (claims.role !== REQUIRED_ROLE) return redirect(302, '/login');
+  const token = event.cookies.get("pos_token");
+  if (!token) return redirect(302, "/login");
+  const claims = verifyJwt(token); // verify RS256 with PUBLIC_KEY env
+  if (claims.role !== REQUIRED_ROLE) return redirect(302, "/login");
   event.locals.user = claims;
   return resolve(event);
 };
@@ -423,9 +458,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 Admin uses `REQUIRED_ROLE = 'admin'`. Cashier uses `REQUIRED_ROLE = 'cashier'`.
 
 ### Admin routes stubs
+
 Each route exports a `+page.server.ts` that fetches from the Laravel gateway using the server-side token and a `+page.svelte` that renders the data. Implement as real pages (not empty shells) with at minimum a list view and a create form.
 
 ### Cashier POS route (`apps/cashier/src/routes/(app)/pos`)
+
 This is the most latency-critical screen. Cart state is local (`$state` rune). Product search calls `GET /api/products?q=` with debounce. Checkout calls `POST /api/sales`. Show a receipt modal on success.
 
 ---
@@ -433,18 +470,23 @@ This is the most latency-critical screen. Cart state is local (`$state` rune). P
 ## Sprint 7 — CI + Scripts
 
 ### `.github/workflows/ci.yml`
+
 Jobs (run in parallel where possible):
+
 1. `proto-lint` — `buf lint && buf breaking --against .git#branch=main`
 2. `go-test` — `go test -short ./...` across all workspace members
 3. `migrate-validate` — verify every service has matching up/down pairs
 4. `gateway-test` — `composer install && vendor/bin/pest`
 
 ### `scripts/migrate-helper.sh`
+
 Usage: `./scripts/migrate-helper.sh up inventory` or `./scripts/migrate-helper.sh create inventory add_threshold`
 Wraps `golang-migrate` with the correct database URL and migrations path per service.
 
 ### Complete Makefile targets
+
 See CLAUDE.md §Commands for the full list. Key additions for Sprint 7:
+
 - `make sqlc-gen` — discover all `sqlc.yaml` files and run `sqlc generate`
 - `make test-integration` — `INTEGRATION=true go test ./...` (requires Docker infra running)
 - `make ci` — proto-lint + migrate-validate + test-go + test-gateway (local CI gate)

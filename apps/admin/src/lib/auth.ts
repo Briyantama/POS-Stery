@@ -1,8 +1,8 @@
-import { browser } from '$app/environment';
-import { goto } from '$app/navigation';
+import { browser } from "$app/environment";
+import { goto } from "$app/navigation";
 
-const TOKEN_KEY = 'pos_admin_token';
-const ROLE_KEY  = 'pos_admin_role';
+const TOKEN_KEY = "pos_admin_token";
+const ROLE_KEY = "pos_admin_role";
 
 export function getToken(): string | null {
   if (!browser) return null;
@@ -26,7 +26,7 @@ export function clearSession(): void {
 
 export function requireAdmin(): void {
   const role = getRole();
-  if (role !== 'admin') {
-    goto('/login');
+  if (role !== "admin") {
+    goto("/login");
   }
 }

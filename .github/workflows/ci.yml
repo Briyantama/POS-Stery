@@ -105,20 +105,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: npm/action-setup@v4
         with:
           version: 9
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'pnpm'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: npm install
 
       - name: Type-check admin
-        run: pnpm --filter @pos-stery/admin check
+        run: npm --filter @pos-stery/admin check
 
       - name: Type-check cashier
-        run: pnpm --filter @pos-stery/cashier check
+        run: npm --filter @pos-stery/cashier check

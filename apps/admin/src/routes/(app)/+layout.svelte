@@ -1,32 +1,26 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { page } from '$app/stores';
-  import { goto } from '$app/navigation';
-  import { getToken, getRole, clearSession } from '$lib/auth';
-  import { api } from '$lib/api';
+  import { page } from "$app/stores";
+  import { goto } from "$app/navigation";
 
-  interface Props { children: import('svelte').Snippet; }
+  interface Props {
+    children: import("svelte").Snippet;
+  }
   let { children }: Props = $props();
 
   const navLinks = [
-    { href: '/dashboard', label: 'Dashboard' },
-    { href: '/products',  label: 'Products' },
-    { href: '/inventory', label: 'Inventory' },
-    { href: '/suppliers', label: 'Suppliers' },
-    { href: '/customers', label: 'Customers' },
-    { href: '/reports',   label: 'Reports' },
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/products", label: "Products" },
+    { href: "/inventory", label: "Inventory" },
+    { href: "/suppliers", label: "Suppliers" },
+    { href: "/customers", label: "Customers" },
+    { href: "/reports", label: "Reports" },
   ];
 
-  onMount(() => {
-    const role = getRole();
-    if (role !== 'admin') goto('/login');
-  });
-
+  // The admin role is enforced server-side in hooks.server.ts; no client guard
+  // is needed here. Logout clears the httpOnly session via /auth/session.
   async function logout() {
-    const token = getToken();
-    if (token) await api.post('/logout', {}, token).catch(() => {});
-    clearSession();
-    goto('/login');
+    await fetch("/auth/session", { method: "DELETE" }).catch(() => {});
+    await goto("/login");
   }
 </script>
 
@@ -43,8 +37,10 @@
           <a
             href={link.href}
             class="sidebar__link"
-            aria-current={$page.url.pathname.startsWith(link.href) ? 'page' : undefined}
-          >{link.label}</a>
+            aria-current={$page.url.pathname.startsWith(link.href)
+              ? "page"
+              : undefined}>{link.label}</a
+          >
         </li>
       {/each}
     </ul>
@@ -60,7 +56,10 @@
 </div>
 
 <style>
-  .shell { display: flex; min-height: 100vh; }
+  .shell {
+    display: flex;
+    min-height: 100vh;
+  }
 
   /* ---- Ink sidebar ---- */
   .sidebar {
@@ -117,7 +116,9 @@
     font-size: var(--text-sm, 0.875rem);
     font-weight: var(--weight-medium, 500);
     color: rgb(240 235 225 / 0.65);
-    transition: background 140ms, color 140ms;
+    transition:
+      background 140ms,
+      color 140ms;
     position: relative;
   }
   .sidebar__link:hover {
@@ -130,7 +131,7 @@
     background: rgb(255 255 255 / 0.1);
   }
   .sidebar__link[aria-current="page"]::before {
-    content: '';
+    content: "";
     position: absolute;
     left: -0.75rem;
     top: 25%;
@@ -150,15 +151,29 @@
     cursor: pointer;
     color: rgb(240 235 225 / 0.65);
     text-align: left;
-    transition: border-color 140ms, color 140ms;
+    transition:
+      border-color 140ms,
+      color 140ms;
   }
   .sidebar__logout:hover {
     color: var(--color-on-ink, #f0ebe1);
     border-color: rgb(255 255 255 / 0.3);
   }
-  .sidebar__logout:focus-visible { outline: none; box-shadow: 0 0 0 3px rgb(255 255 255 / 0.3); }
+  .sidebar__logout:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgb(255 255 255 / 0.3);
+  }
 
   /* ---- Content area ---- */
-  .main-area { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-  .content { flex: 1; padding: 2rem; overflow-y: auto; }
+  .main-area {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .content {
+    flex: 1;
+    padding: 2rem;
+    overflow-y: auto;
+  }
 </style>

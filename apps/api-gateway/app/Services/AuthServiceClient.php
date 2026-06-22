@@ -19,8 +19,12 @@ class AuthServiceClient extends BaseGrpcGatewayClient
         return $this->post('/v1/auth/validate', compact('token'));
     }
 
-    public function logout(string $token): array
+    public function logout(string $accessToken, string $refreshToken = ''): array
     {
-        return $this->post('/v1/auth/logout', compact('token'));
+        // auth.proto LogoutRequest expects access_token / refresh_token.
+        return $this->post('/v1/auth/logout', [
+            'access_token'  => $accessToken,
+            'refresh_token' => $refreshToken,
+        ]);
     }
 }

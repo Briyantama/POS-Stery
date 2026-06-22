@@ -1,9 +1,9 @@
-import { browser } from '$app/environment';
-import { goto } from '$app/navigation';
+import { browser } from "$app/environment";
+import { goto } from "$app/navigation";
 
-const TOKEN_KEY = 'pos_cashier_token';
-const ROLE_KEY  = 'pos_cashier_role';
-const STORE_KEY = 'pos_cashier_store';
+const TOKEN_KEY = "pos_cashier_token";
+const ROLE_KEY = "pos_cashier_role";
+const STORE_KEY = "pos_cashier_store";
 
 export function getToken(): string | null {
   if (!browser) return null;
@@ -30,5 +30,5 @@ export function clearSession(): void {
 export function requireCashier(): void {
   if (!browser) return;
   const role = localStorage.getItem(ROLE_KEY);
-  if (role !== 'cashier') goto('/login');
+  if (role !== "cashier") goto("/login");
 }

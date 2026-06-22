@@ -9,6 +9,10 @@ import (
 type UserRepository interface {
 	FindByEmail(ctx context.Context, tenantID TenantID, email string) (*User, error)
 	FindByID(ctx context.Context, tenantID TenantID, id UserID) (*User, error)
+	// ResolveTenantByEmail returns the tenant that owns the (globally unique)
+	// email, for public login where tenant_id is unknown pre-auth. Returns
+	// ErrNotFound when no single active user matches.
+	ResolveTenantByEmail(ctx context.Context, email string) (TenantID, error)
 }
 
 type TenantRepository interface {
