@@ -10,14 +10,11 @@ vendor/
 bin/
 dist/
 
-# Generated proto output — never commit
-gen/go/
+# Generated proto output — never commit individual pb files, but track go.mod/go.sum
+gen/go/**/*.pb.go
+gen/go/**/*_grpc.pb.go
+gen/go/**/*.pb.gw.go
 gen/openapi/
-
-# Build artifacts
-*.pb.go
-*_grpc.pb.go
-*.pb.gw.go
 
 # PHP / Composer
 apps/api-gateway/vendor/
@@ -68,3 +65,4 @@ logs/
 
 # Docker
 .docker/
+.claude/worktrees/

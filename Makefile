@@ -3,7 +3,7 @@ SHELL := /bin/bash
 
 ROOT_DIR := $(shell pwd)
 DOCKER_COMPOSE := docker compose -f deploy/docker/docker-compose.yml
-GO_SERVICES := auth-service product-service inventory-service sales-service supplier-service customer-service
+GO_SERVICES := auth-service product-service inventory-service sales-service supplier-service customer-service api-gateway
 
 # ─── Help ─────────────────────────────────────────────────────────────────────
 
@@ -203,9 +203,13 @@ install-gateway:
 test-gateway:
 	cd apps/api-gateway && vendor/bin/pest
 
+.PHONY: dev-gateway-legacy
+dev-gateway-legacy:
+	cd apps/api-gateway && php artisan serve --port=8000
+
 .PHONY: dev-gateway
 dev-gateway:
-	cd apps/api-gateway && php artisan serve --port=8000
+	cd services/api-gateway && go run ./cmd/server/...
 
 # ─── SvelteKit apps ───────────────────────────────────────────────────────────
 

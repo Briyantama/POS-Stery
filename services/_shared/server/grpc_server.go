@@ -16,6 +16,15 @@ type Config struct {
 }
 
 // New creates a gRPC server with the standard interceptor chain.
+//
+// Transport security: plaintext. All gRPC servers listen on the internal pos-net
+// Docker bridge (development) or the Kubernetes pod overlay network (production).
+// No gRPC port is exposed outside those trusted network boundaries; the only
+// external-facing surface is the HTTP API gateway. Application-level service
+// identity is enforced by the X-Service-Token HMAC-SHA256 interceptor below.
+// If the deployment model changes to expose gRPC externally, replace this call
+// with grpc.Creds(credentials.NewTLS(tlsCfg)) and provision per-service certs.
+// See docs/security/grpc-transport-security.md.
 func New(cfg Config, log *zap.Logger) *grpc.Server {
 	srv := grpc.NewServer(
 		grpc.UnaryInterceptor(

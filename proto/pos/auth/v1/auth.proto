@@ -48,6 +48,13 @@ service AuthService {
       get: "/v1/auth/sessions"
     };
   }
+
+  rpc ValidateStore(ValidateStoreRequest) returns (ValidateStoreResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/validate-store"
+      body: "*"
+    };
+  }
 }
 
 message LoginRequest {
@@ -131,4 +138,13 @@ message UserClaims {
   string store_id  = 3;
   string role      = 4;
   string email     = 5;
+}
+
+message ValidateStoreRequest {
+  string tenant_id = 1;
+  string store_id  = 2;
+}
+
+message ValidateStoreResponse {
+  bool valid = 1;
 }

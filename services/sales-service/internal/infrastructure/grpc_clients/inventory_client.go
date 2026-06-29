@@ -39,6 +39,9 @@ func NewInventoryClient(cfg InventoryClientConfig) (*InventoryClient, error) {
 		return nil, fmt.Errorf("INVENTORY_SERVICE_URL is not set")
 	}
 
+	// Plaintext transport: inventory-service is only reachable within the pos-net
+	// Docker bridge / Kubernetes overlay network. X-Service-Token HMAC-SHA256
+	// verifies service identity on every call. See docs/security/grpc-transport-security.md.
 	conn, err := grpc.NewClient(url,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)

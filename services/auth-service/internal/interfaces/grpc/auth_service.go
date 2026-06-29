@@ -2,13 +2,23 @@ package grpc
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/google/uuid"
 	authv1 "github.com/pos-stery/pos-stery/gen/go/pos/auth/v1"
 	sherrors "github.com/pos-stery/pos-stery/services/_shared/errors"
 	"github.com/pos-stery/pos-stery/services/auth-service/internal/application"
 	"github.com/pos-stery/pos-stery/services/auth-service/internal/application/commands"
+	"github.com/pos-stery/pos-stery/services/auth-service/internal/domain"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+// storeExistenceChecker is the subset of the store repository used by ValidateStore.
+type storeExistenceChecker interface {
+	ExistsInTenant(ctx context.Context, tenantID domain.TenantID, id domain.StoreID) (bool, error)
+}
 
 type AuthServiceServer struct {
 	authv1.UnimplementedAuthServiceServer
@@ -19,6 +29,7 @@ type AuthServiceServer struct {
 	logoutAll    *commands.LogoutAllHandler
 	listSessions *commands.ListSessionsHandler
 	signer       application.TokenSigner
+	storeRepo    storeExistenceChecker
 }
 
 func NewAuthServiceServer(
@@ -29,6 +40,7 @@ func NewAuthServiceServer(
 	logoutAll *commands.LogoutAllHandler,
 	listSessions *commands.ListSessionsHandler,
 	signer application.TokenSigner,
+	storeRepo storeExistenceChecker,
 ) *AuthServiceServer {
 	return &AuthServiceServer{
 		login:        login,
@@ -38,6 +50,7 @@ func NewAuthServiceServer(
 		logoutAll:    logoutAll,
 		listSessions: listSessions,
 		signer:       signer,
+		storeRepo:    storeRepo,
 	}
 }
 
@@ -152,4 +165,21 @@ func (s *AuthServiceServer) ListSessions(ctx context.Context, req *authv1.ListSe
 		}
 	}
 	return &authv1.ListSessionsResponse{Sessions: sessions}, nil
+}
+
+func (s *AuthServiceServer) ValidateStore(ctx context.Context, req *authv1.ValidateStoreRequest) (*authv1.ValidateStoreResponse, error) {
+	tenantID, err := uuid.Parse(req.TenantId)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid tenant_id: %v", err)
+	}
+	storeID, err := uuid.Parse(req.StoreId)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid store_id: %v", err)
+	}
+
+	ok, err := s.storeRepo.ExistsInTenant(ctx, tenantID, storeID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, fmt.Sprintf("check store ownership: %v", err))
+	}
+	return &authv1.ValidateStoreResponse{Valid: ok}, nil
 }

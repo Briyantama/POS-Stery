@@ -232,20 +232,19 @@ services:
   api-gateway:
     build:
       context: ../..
-      dockerfile: apps/api-gateway/Dockerfile
+      dockerfile: services/api-gateway/Dockerfile
     image: pos-stery/api-gateway:dev
     container_name: pos-api-gateway
     environment:
-      APP_URL: http://localhost:8000
-      AUTH_SERVICE_URL: http://auth-service:8081
-      PRODUCT_SERVICE_URL: http://product-service:8082
-      INVENTORY_SERVICE_URL: http://inventory-service:8083
-      SALES_SERVICE_URL: http://sales-service:8084
-      SUPPLIER_SERVICE_URL: http://supplier-service:8085
-      CUSTOMER_SERVICE_URL: http://customer-service:8086
-      SERVICE_TOKEN_SECRET: changeme
-      APP_ENV: development
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      <<: *service-defaults
+      HTTP_PORT: 8000
+      JWT_RS256_PUBLIC_KEY_PATH: /keys/public.pem
+      AUTH_SERVICE_URL: auth-service:8081
+      PRODUCT_SERVICE_URL: product-service:8082
+      INVENTORY_SERVICE_URL: inventory-service:8083
+      SALES_SERVICE_URL: sales-service:8084
+      SUPPLIER_SERVICE_URL: supplier-service:8085
+      CUSTOMER_SERVICE_URL: customer-service:8086
     ports:
       - "8000:8000"
     depends_on:
@@ -255,9 +254,9 @@ services:
       - sales-service
       - supplier-service
       - customer-service
-      - postgres
       - redis
-      - nats
+    volumes:
+      - ../../keys:/keys:ro
     networks:
       - pos-net
 

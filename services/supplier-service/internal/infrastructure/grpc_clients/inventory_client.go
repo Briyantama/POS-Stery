@@ -34,6 +34,9 @@ func NewInventoryClient() (*InventoryClient, error) {
 		secret = "changeme"
 	}
 
+	// Plaintext transport: inventory-service is only reachable within the pos-net
+	// Docker bridge / Kubernetes overlay network. X-Service-Token HMAC-SHA256
+	// verifies service identity on every call. See docs/security/grpc-transport-security.md.
 	cc, err := grpc.NewClient(addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)

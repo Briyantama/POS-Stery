@@ -107,6 +107,7 @@ func run() error {
 		logoutAllHandler,
 		listSessionsHandler,
 		signer,
+		storeRepo,
 	))
 
 	logger.Sugar().Infof("auth-service listening on :%d", cfg.GRPC.Port)

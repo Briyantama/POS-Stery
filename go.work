@@ -3,6 +3,7 @@ go 1.25.0
 use (
 	./gen/go
 	./services/_shared
+	./services/api-gateway
 	./services/auth-service
 	./services/customer-service
 	./services/inventory-service
