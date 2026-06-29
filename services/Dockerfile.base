@@ -1,0 +1,50 @@
+# Multi-stage build for Go services
+# Usage: docker build -f services/Dockerfile.base --build-arg SERVICE=auth-service -t pos-stery/auth-service:dev .
+
+ARG SERVICE=auth-service
+ARG GO_VERSION=1.25-alpine
+
+# Build stage
+FROM golang:${GO_VERSION} AS builder
+
+RUN apk add --no-cache git ca-certificates
+
+WORKDIR /workspace
+
+# Copy workspace and module files
+COPY go.work go.work.sum ./
+COPY gen/go/go.mod gen/go/go.sum ./gen/go/
+COPY services/_shared/go.mod services/_shared/go.sum ./services/_shared/
+
+# Copy all service go.mod/go.sum (required by go.work)
+COPY services/auth-service/go.mod services/auth-service/go.sum ./services/auth-service/
+COPY services/customer-service/go.mod services/customer-service/go.sum ./services/customer-service/
+COPY services/inventory-service/go.mod services/inventory-service/go.sum ./services/inventory-service/
+COPY services/product-service/go.mod services/product-service/go.sum ./services/product-service/
+COPY services/sales-service/go.mod services/sales-service/go.sum ./services/sales-service/
+COPY services/supplier-service/go.mod services/supplier-service/go.sum ./services/supplier-service/
+
+# Copy generated code and shared code
+COPY gen/go/ ./gen/go/
+COPY services/_shared/ ./services/_shared/
+
+# Copy only the specific service being built
+ARG SERVICE
+COPY services/${SERVICE}/ ./services/${SERVICE}/
+
+# Build
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-w -s" \
+    -o /service \
+    ./services/${SERVICE}/cmd/server
+
+# Runtime stage
+FROM gcr.io/distroless/static-debian12:nonroot
+
+COPY --from=builder /service /service
+
+# Port configuration is handled by docker-compose.yml
+# Each service uses its own port (e.g., auth:8081, product:8082, inventory:8083)
+# EXPOSE is documentation-only and not enforced here
+
+ENTRYPOINT ["/service"]

@@ -83,12 +83,15 @@ CREATE POLICY tenant_isolation ON auth.users
 -- ── User-Roles ────────────────────────────────────────────────────────────────
 
 CREATE TABLE auth.user_roles (
+    id         UUID NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id    UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     role_id    UUID NOT NULL REFERENCES auth.roles(id),
     store_id   UUID,  -- NULL = role applies to all stores (admin), non-NULL = store-scoped (cashier)
-    tenant_id  UUID NOT NULL REFERENCES auth.tenants(id),
-    PRIMARY KEY (user_id, role_id, COALESCE(store_id, '00000000-0000-0000-0000-000000000000'))
+    tenant_id  UUID NOT NULL REFERENCES auth.tenants(id)
 );
+
+CREATE UNIQUE INDEX ux_user_roles_user_role_tenant_store
+    ON auth.user_roles (user_id, role_id, tenant_id, COALESCE(store_id, '00000000-0000-0000-0000-000000000000'));
 
 CREATE INDEX idx_user_roles_user_id   ON auth.user_roles(user_id);
 CREATE INDEX idx_user_roles_tenant_id ON auth.user_roles(tenant_id);

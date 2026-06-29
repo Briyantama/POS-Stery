@@ -1,0 +1,61 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Node
+node_modules
+npm-debug.log
+yarn-error.log
+pnpm-lock.yaml
+apps/*/node_modules
+apps/*/.next
+apps/*/dist
+apps/*/.svelte-kit
+
+# PHP
+apps/api-gateway/vendor
+apps/api-gateway/.env
+apps/api-gateway/.env.*.local
+apps/api-gateway/bootstrap/cache
+apps/api-gateway/storage
+
+# Go
+services/*/vendor
+**/.air
+
+# Build outputs
+dist
+build
+out
+
+# Test coverage
+coverage
+.nyc_output
+
+# Logs
+*.log
+logs
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Claude
+.claude
+.claude.json
+
+# Docker
+docker-compose.override.yml
+
+# Others
+.env.local
+.env.*.local

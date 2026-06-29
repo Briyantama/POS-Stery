@@ -57,14 +57,23 @@ help:
 
 .PHONY: dev
 dev:
-	$(DOCKER_COMPOSE) up -d
+	$(DOCKER_COMPOSE) up -d --build
 	@echo "Waiting for Postgres..."
 	@$(DOCKER_COMPOSE) exec -T postgres pg_isready -U postgres -d pos_db --timeout=30 || true
 	@echo "Infra ready. Jaeger UI: http://localhost:16686  Prometheus: http://localhost:9090"
 
+.PHONY: dev-stack
+dev-stack:
+	$(DOCKER_COMPOSE) up -d --build
+	@echo "Waiting for services..."
+	@$(DOCKER_COMPOSE) exec -T postgres pg_isready -U postgres -d pos_db --timeout=30 || true
+	@echo "Gateway: http://localhost:8000"
+	@echo "Admin: http://localhost:5173"
+	@echo "Cashier: http://localhost:5174"
+
 .PHONY: dev-down
 dev-down:
-	$(DOCKER_COMPOSE) down
+	$(DOCKER_COMPOSE) down -v --remove-orphans
 
 .PHONY: dev-reset
 dev-reset:
