@@ -57,13 +57,11 @@ Run a single service test:
 cd services/inventory-service && go test ./internal/application/commands/...
 ```
 
-### Laravel API Gateway
+### Go API Gateway
 
 ```bash
-make install-gateway   # composer install
-make test-gateway      # vendor/bin/pest
-make dev-gateway       # php artisan serve
-cd apps/api-gateway && php artisan test --filter AuthTest   # single test class
+make dev-gateway       # go run ./cmd/server/... (services/api-gateway, default :8000)
+cd services/api-gateway && go test ./...
 ```
 
 ### SvelteKit Apps
@@ -78,7 +76,7 @@ make dev-cashier       # pnpm dev (cashier POS, default :5174)
 ### All-in-one bootstrap
 
 ```bash
-make all    # proto-gen + migrate-up + build-go + install-gateway + install-admin + install-cashier
+make all    # proto-gen + migrate-up + build-go + install-admin + install-cashier
 ```
 
 ---
@@ -91,8 +89,8 @@ make all    # proto-gen + migrate-up + build-go + install-gateway + install-admi
 Browser (SvelteKit)
     │  REST/JSON
     ▼
-apps/api-gateway  ← Laravel 11 (auth, RBAC, request validation)
-    │  HTTP/JSON (grpc-gateway transcoding — no PHP gRPC extension needed)
+services/api-gateway  ← Go (chi router, RS256 JWT auth, Redis JTI blacklist, RBAC)
+    │  gRPC (plaintext, internal network only)
     ▼
 Go microservices  ← each owns a Postgres schema + publishes to NATS
     │  NATS JetStream (POS_EVENTS stream)
@@ -100,7 +98,7 @@ Go microservices  ← each owns a Postgres schema + publishes to NATS
 Event consumers   ← services subscribe to Sale.Completed, Product.LowStock, etc.
 ```
 
-The grpc-gateway sidecar in each Go service exposes HTTP/1.1 JSON endpoints that Laravel calls via Guzzle. This means the gateway never needs a native PHP gRPC client.
+The Go API gateway dials each backend service directly over gRPC using generated client stubs. All gRPC traffic is internal to the `pos-net` Docker bridge / Kubernetes overlay network.
 
 ### Go workspace
 

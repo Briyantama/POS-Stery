@@ -37,10 +37,8 @@ help:
 	@echo "    make tidy          go mod tidy across workspace"
 	@echo "    make sqlc-gen      sqlc generate for all services"
 	@echo ""
-	@echo "  Laravel gateway:"
-	@echo "    make install-gateway   composer install"
-	@echo "    make test-gateway      vendor/bin/pest"
-	@echo "    make dev-gateway       php artisan serve"
+	@echo "  Go gateway:"
+	@echo "    make dev-gateway       go run ./cmd/server/... (services/api-gateway)"
 	@echo ""
 	@echo "  SvelteKit:"
 	@echo "    make install-admin     npm install (admin)"
@@ -50,7 +48,7 @@ help:
 	@echo ""
 	@echo "  All-in-one:"
 	@echo "    make all           proto-gen + migrate-up + build-go + install all frontends"
-	@echo "    make ci            Local CI gate: proto-lint + migrate-validate + test-go + test-gateway"
+	@echo "    make ci            Local CI gate: proto-lint + migrate-validate + test-go"
 	@echo ""
 
 # ─── Infrastructure ───────────────────────────────────────────────────────────
@@ -193,19 +191,7 @@ sqlc-gen:
 		fi \
 	done
 
-# ─── Laravel gateway ──────────────────────────────────────────────────────────
-
-.PHONY: install-gateway
-install-gateway:
-	cd apps/api-gateway && PATH="$$(echo "$$PATH" | tr ':' '\n' | grep -vi 'chocolatey' | tr '\n' ':')" composer install
-
-.PHONY: test-gateway
-test-gateway:
-	cd apps/api-gateway && vendor/bin/pest
-
-.PHONY: dev-gateway-legacy
-dev-gateway-legacy:
-	cd apps/api-gateway && php artisan serve --port=8000
+# ─── Go gateway ───────────────────────────────────────────────────────────────
 
 .PHONY: dev-gateway
 dev-gateway:
@@ -232,11 +218,11 @@ dev-cashier:
 # ─── All-in-one ───────────────────────────────────────────────────────────────
 
 .PHONY: all
-all: proto-gen migrate-up build-go install-gateway install-admin install-cashier
+all: proto-gen migrate-up build-go install-admin install-cashier
 	@echo "Bootstrap complete."
 
 .PHONY: ci
-ci: proto-lint migrate-validate test-go test-gateway
+ci: proto-lint migrate-validate test-go
 	@echo "CI gate passed."
 
 # ─── Preflight ────────────────────────────────────────────────────────────────
