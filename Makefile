@@ -13,7 +13,8 @@ help:
 	@echo "POS-Stery — available targets"
 	@echo ""
 	@echo "  Infrastructure:"
-	@echo "    make dev           Start infra (Postgres, Redis, NATS, Jaeger, Prometheus)"
+	@echo "    make db-init       Create pos_db + pos_admin/pos_app roles on local Postgres"
+	@echo "    make dev           Start infra (Redis, NATS, Jaeger, Prometheus) via Docker"
 	@echo "    make dev-down      Stop infra"
 	@echo "    make dev-reset     Destroy volumes + restart (DESTRUCTIVE)"
 	@echo ""
@@ -53,18 +54,19 @@ help:
 
 # ─── Infrastructure ───────────────────────────────────────────────────────────
 
+.PHONY: db-init
+db-init:
+	bash scripts/init-local-db.sh
+
 .PHONY: dev
 dev:
 	$(DOCKER_COMPOSE) up -d --build
-	@echo "Waiting for Postgres..."
-	@$(DOCKER_COMPOSE) exec -T postgres pg_isready -U postgres -d pos_db --timeout=30 || true
 	@echo "Infra ready. Jaeger UI: http://localhost:16686  Prometheus: http://localhost:9090"
+	@echo "Tip: run 'make db-init' first if pos_db roles are not yet created."
 
 .PHONY: dev-stack
 dev-stack:
 	$(DOCKER_COMPOSE) up -d --build
-	@echo "Waiting for services..."
-	@$(DOCKER_COMPOSE) exec -T postgres pg_isready -U postgres -d pos_db --timeout=30 || true
 	@echo "Gateway: http://localhost:8000"
 	@echo "Admin: http://localhost:5173"
 	@echo "Cashier: http://localhost:5174"

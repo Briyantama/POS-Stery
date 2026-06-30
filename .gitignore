@@ -31,6 +31,7 @@ apps/admin/build/
 apps/cashier/.svelte-kit/
 apps/cashier/build/
 packages/ui/.svelte-kit/
+vite.config.ts.timestamp-*.mjs
 
 # pnpm
 .pnpm-store/

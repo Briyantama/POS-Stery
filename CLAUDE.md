@@ -205,3 +205,26 @@ API calls go to the Laravel gateway at `PUBLIC_GATEWAY_URL` (set in `.env`).
 - All report queries must be scoped by both `tenant_id` and `store_id`.
 - Phase 1 has no public tenant signup — tenants are seeded via console command.
 - Elasticsearch and MinIO are optional and excluded from Phase 1.
+
+---
+
+## PM2 Services
+
+> Prerequisite: `make dev` must be running (infra). Install PM2 once: `npm install -g pm2`
+
+| Port | Name | Type |
+|------|------|------|
+| 5173 | pos-admin-5173 | SvelteKit (admin dashboard) |
+| 5174 | pos-cashier-5174 | SvelteKit (cashier POS) |
+| 8000 | pos-gateway-8000 | Go API gateway |
+
+**Terminal Commands:**
+```bash
+pm2 start ecosystem.config.cjs   # First time (loads config)
+pm2 start all                    # After first time
+pm2 stop all / pm2 restart all
+pm2 start pos-admin-5173 / pm2 stop pos-admin-5173
+pm2 logs / pm2 status / pm2 monit
+pm2 save                         # Save process list
+pm2 resurrect                    # Restore saved list
+```
