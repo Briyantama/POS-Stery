@@ -24,7 +24,8 @@
     onchange,
   }: Props = $props();
 
-  const inputId = id ?? `input-${Math.random().toString(36).slice(2)}`;
+  const uid = $props.id();
+  const inputId = $derived(id ?? `input-${uid}`);
 </script>
 
 <div class="field" class:field--error={!!error}>

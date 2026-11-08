@@ -23,7 +23,8 @@
     onchange,
   }: Props = $props();
 
-  const selectId = id ?? `select-${Math.random().toString(36).slice(2)}`;
+  const uid = $props.id();
+  const selectId = $derived(id ?? `select-${uid}`);
 </script>
 
 <div class="field">
