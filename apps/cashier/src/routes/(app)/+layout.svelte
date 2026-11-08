@@ -26,11 +26,6 @@
         class="topbar__link"
         aria-current={$page.url.pathname.startsWith('/pos') ? 'page' : undefined}
       >New Sale</a>
-      <a
-        href="/receipts"
-        class="topbar__link"
-        aria-current={$page.url.pathname.startsWith('/receipts') ? 'page' : undefined}
-      >Receipts</a>
     </nav>
 
     <button class="topbar__logout" onclick={logout}>Sign out</button>

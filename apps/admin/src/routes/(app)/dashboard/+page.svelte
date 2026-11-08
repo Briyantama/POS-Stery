@@ -36,34 +36,8 @@
   });
 
   function fmtIDR(n: number) {
-    return "IDR " + n.toLocaleString("id-ID");
+    return "IDR " + n.toLocaleString("id-ID");
   }
-
-  /* Mini sparkline — 7 synthetic daily bars derived from total (demo shape) */
-  function sparkBars(total: number): number[] {
-    if (!total) return [0, 0, 0, 0, 0, 0, 0];
-    const weights = [0.09, 0.11, 0.14, 0.13, 0.17, 0.16, 0.2];
-    return weights.map((w) => Math.round(w * total));
-  }
-
-  const bars = $derived(sparkBars(report?.total_revenue ?? 0));
-  const maxBar = $derived(Math.max(...bars, 1));
-
-  /* Payment mix totals — fallback to even split if API doesn't return them */
-  const payMix = $derived(
-    report?.payment_mix ?? {
-      cash: Math.round((report?.total_revenue ?? 0) * 0.55),
-      qris: Math.round((report?.total_revenue ?? 0) * 0.3),
-      debit: Math.round((report?.total_revenue ?? 0) * 0.15),
-    },
-  );
-
-  const drawer = $derived(
-    report?.cash_drawer ?? {
-      opening_float: 500_000,
-      expected: 500_000 + (payMix.cash ?? 0),
-    },
-  );
 </script>
 
 <svelte:head><title>Dashboard — POS-Stery Admin</title></svelte:head>
@@ -82,20 +56,13 @@
         <span class="hero-value">{fmtIDR(report.total_revenue ?? 0)}</span>
         <span class="hero-sub">{report.transaction_count ?? 0} sales · {today}</span>
       </div>
-      <div class="hero-spark" aria-hidden="true">
-        {#each bars as h, i}
-          <div
-            class="spark-bar"
-            class:spark-bar--last={i === bars.length - 1}
-            style="height:{Math.round((h / maxBar) * 52)}px"
-          ></div>
-        {/each}
-      </div>
     </div>
   </div>
 
   <!-- ── Operations row: Payment Mix + Cash Drawer ─────────────── -->
   <div class="ops-row">
+    {#if report.payment_mix}
+    {@const payMix = report.payment_mix}
     <div class="ops-card">
       <h2 class="ops-title">Payment Mix</h2>
       <dl class="ops-dl">
@@ -113,7 +80,10 @@
         </div>
       </dl>
     </div>
+    {/if}
 
+    {#if report.cash_drawer}
+    {@const drawer = report.cash_drawer}
     <div class="ops-card">
       <h2 class="ops-title">Cash Drawer</h2>
       <dl class="ops-dl">
@@ -138,6 +108,7 @@
         {/if}
       </dl>
     </div>
+    {/if}
   </div>
 
   <!-- ── Bottom row: Top Products + Low Stock ──────────────────── -->
@@ -236,25 +207,6 @@
   .hero-sub {
     font-size: var(--text-sm, 0.875rem);
     color: var(--color-muted, #7a7060);
-  }
-
-  /* Mini 7-bar sparkline */
-  .hero-spark {
-    display: flex;
-    align-items: flex-end;
-    gap: 3px;
-    height: 52px;
-    flex-shrink: 0;
-  }
-  .spark-bar {
-    width: 10px;
-    min-height: 4px;
-    background: var(--color-primary-light, #e3e8f5);
-    border-radius: 2px 2px 0 0;
-    transition: height 300ms ease;
-  }
-  .spark-bar--last {
-    background: var(--color-primary, #1b3b8f);
   }
 
   /* ── Operations row ── */

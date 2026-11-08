@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, ApiError } from '$lib/api';
-  import { Alert, Badge, Button, Card, Input, PageHeader, Table } from '@pos-stery/ui';
+  import { Alert, Badge, Card, Input, PageHeader, Table } from '@pos-stery/ui';
 
   interface Product {
     id: string; name: string; sku: string; base_price: number;
@@ -30,9 +30,7 @@
 
 <svelte:head><title>Products — POS-Stery Admin</title></svelte:head>
 
-<PageHeader title="Products">
-  <Button onclick={() => {}}>+ Add Product</Button>
-</PageHeader>
+<PageHeader title="Products" />
 
 <Card>
   <div class="toolbar">

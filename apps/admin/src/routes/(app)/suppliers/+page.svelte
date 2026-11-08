@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, ApiError } from '$lib/api';
-  import { Alert, Button, Card, PageHeader, Table } from '@pos-stery/ui';
+  import { Alert, Card, PageHeader, Table } from '@pos-stery/ui';
 
   interface Supplier { id: string; name: string; contact: string; phone: string; email: string; }
 
@@ -23,9 +23,7 @@
 
 <svelte:head><title>Suppliers — POS-Stery Admin</title></svelte:head>
 
-<PageHeader title="Suppliers">
-  <Button onclick={() => {}}>+ Add Supplier</Button>
-</PageHeader>
+<PageHeader title="Suppliers" />
 
 {#if error}
   <Alert>{error}</Alert>
