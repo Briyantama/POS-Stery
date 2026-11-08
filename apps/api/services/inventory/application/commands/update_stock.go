@@ -66,18 +66,8 @@ func (h *UpdateStockHandler) Handle(ctx context.Context, cmd UpdateStockCommand)
 		return UpdateStockResult{}, fmt.Errorf("delta must be non-zero: %w", domain.ErrInvalidArgument)
 	}
 
-	// 1. Load current quantity to enforce the no-negative rule before touching the DB.
-	current, err := h.stockRepo.GetItem(ctx, cmd.TenantID, cmd.StoreID, cmd.ProductID)
-	if err != nil {
-		return UpdateStockResult{}, fmt.Errorf("get stock item: %w", err)
-	}
-
-	// 2. Pre-flight: reject update that would result in negative stock.
-	if current.Quantity+cmd.Delta < 0 {
-		return UpdateStockResult{}, domain.ErrStockWouldGoNegative
-	}
-
-	// 3. Atomically apply the delta in Postgres.
+	// 1. Atomically apply the delta in Postgres; the repo rejects a result below zero
+	//    (a read-then-write pre-check here would race with concurrent sales).
 	updated, err := h.stockRepo.UpdateStock(
 		ctx,
 		cmd.TenantID, cmd.StoreID, cmd.ProductID,

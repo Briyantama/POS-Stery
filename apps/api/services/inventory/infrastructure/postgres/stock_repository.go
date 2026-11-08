@@ -44,6 +44,8 @@ func (r *StockRepository) AddItem(ctx context.Context, item *domain.StockItem) e
 }
 
 // UpdateStock atomically applies delta to the quantity using a single UPDATE … RETURNING.
+// The UPDATE only matches when the result stays >= 0; zero rows yield ErrNotFound
+// (no such item) or ErrStockWouldGoNegative (item exists but stock is insufficient).
 func (r *StockRepository) UpdateStock(
 	ctx context.Context,
 	tenantID, storeID, productID uuid.UUID,
@@ -62,12 +64,23 @@ func (r *StockRepository) UpdateStock(
 			WHERE tenant_id  = $2
 			  AND store_id   = $3
 			  AND product_id = $4
+			  AND quantity + $1 >= 0
 			RETURNING id, tenant_id, store_id, product_id, quantity, created_at, updated_at
 		`, delta, tenantID, storeID, productID)
 
 		item, err := scanStockItem(row)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
+				var exists bool
+				if qerr := tx.QueryRow(ctx, `
+					SELECT EXISTS (SELECT 1 FROM inventory.stock_items
+					WHERE tenant_id = $1 AND store_id = $2 AND product_id = $3)
+				`, tenantID, storeID, productID).Scan(&exists); qerr != nil {
+					return fmt.Errorf("check stock item: %w", qerr)
+				}
+				if exists {
+					return domain.ErrStockWouldGoNegative
+				}
 				return fmt.Errorf("stock item: %w", domain.ErrNotFound)
 			}
 			return fmt.Errorf("update stock: %w", err)

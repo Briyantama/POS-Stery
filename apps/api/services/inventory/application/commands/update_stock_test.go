@@ -127,19 +127,11 @@ func TestUpdateStock_ZeroDelta(t *testing.T) {
 	}
 }
 
-func TestUpdateStock_GetItemError(t *testing.T) {
-	repo := &stubStockRepo{getErr: errors.New("db down")}
-	cmd := validUpdateCmd(uuid.New(), uuid.New(), uuid.New(), -3)
-	_, err := commands.NewUpdateStockHandler(repo, &stubThresholdRepo{}, &stubInvPublisher{}).Handle(context.Background(), cmd)
-	if err == nil {
-		t.Fatal("want error when GetItem fails")
-	}
-}
-
 func TestUpdateStock_WouldGoNegative(t *testing.T) {
-	item := stockItem(2)
-	repo := &stubStockRepo{current: item}
-	cmd := validUpdateCmd(item.TenantID, item.StoreID, item.ProductID, -5)
+	// The repo's atomic UPDATE rejects the decrement; the handler must not
+	// depend on a (racy) prior read.
+	repo := &stubStockRepo{updateErr: domain.ErrStockWouldGoNegative}
+	cmd := validUpdateCmd(uuid.New(), uuid.New(), uuid.New(), -5)
 
 	_, err := commands.NewUpdateStockHandler(repo, &stubThresholdRepo{}, &stubInvPublisher{}).Handle(context.Background(), cmd)
 	if !errors.Is(err, domain.ErrStockWouldGoNegative) {
