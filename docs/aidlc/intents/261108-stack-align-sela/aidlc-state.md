@@ -16,4 +16,4 @@
 | Functional design (plan + ADRs) | Done |
 | Code generation (B1-B5) | Done |
 | Build and test (B6) | Done locally: go build/vet/test, migrations up/down/up, Docker image, API smoke, svelte-check, web build |
-| Deployment pipeline (U8) | CI written; blocked until stery-kit is pushed and `STERY_KIT_TOKEN` exists |
+| Deployment pipeline (U8) | CI written; stery-kit pushed (public repo, checked out without a token) |

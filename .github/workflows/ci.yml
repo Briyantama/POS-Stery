@@ -15,7 +15,6 @@ jobs:
         with:
           repository: Briyantama/stery-kit
           path: stery-kit
-          token: ${{ secrets.STERY_KIT_TOKEN }}
           persist-credentials: false
       - run: docker build -f POS-Stery/apps/api/Dockerfile -t pos-api:ci .
 
@@ -49,7 +48,6 @@ jobs:
         with:
           repository: Briyantama/stery-kit
           path: stery-kit
-          token: ${{ secrets.STERY_KIT_TOKEN }}
           persist-credentials: false
       - uses: actions/setup-go@v5
         with:
@@ -76,7 +74,6 @@ jobs:
         with:
           repository: Briyantama/stery-kit
           path: stery-kit
-          token: ${{ secrets.STERY_KIT_TOKEN }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
