@@ -69,7 +69,7 @@ func (sessionsStub) Handle(context.Context, commands.ListSessionsQuery) (*comman
 
 type storesStub struct{}
 
-func (storesStub) Handle(context.Context, domain.TenantID) ([]*domain.Store, error) {
+func (storesStub) ListByTenant(context.Context, domain.TenantID) ([]*domain.Store, error) {
 	return []*domain.Store{{ID: uuid.MustParse("11111111-1111-1111-1111-111111111111"), Name: "Main"}}, nil
 }
 

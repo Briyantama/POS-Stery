@@ -29,15 +29,6 @@ type UserRole struct {
 	StoreID *StoreID
 }
 
-type Tenant struct {
-	ID        TenantID
-	Name      string
-	Slug      string
-	IsActive  bool
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
 type Store struct {
 	ID        StoreID
 	TenantID  TenantID

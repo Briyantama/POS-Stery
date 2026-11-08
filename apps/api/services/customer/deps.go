@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/Briyantama/POS-Stery/services/customer/application/commands"
-	"github.com/Briyantama/POS-Stery/services/customer/application/queries"
 	"github.com/Briyantama/POS-Stery/services/customer/infrastructure"
 	"github.com/Briyantama/POS-Stery/services/customer/infrastructure/postgres"
 	"github.com/Briyantama/stery-kit/go/authn"
@@ -17,7 +16,7 @@ type Deps struct {
 	Pool     *pgxpool.Pool
 	Events   *events.Publisher
 	Verifier authn.Verifier
-	// RequireStore validates the store of the caller (auth.ValidateStore).
+	// RequireStore validates the store of the caller (auth.RequireStore).
 	RequireStore func(http.Handler) http.Handler
 }
 
@@ -28,7 +27,8 @@ func Build(d Deps) (*HTTPHandler, error) {
 	return NewHTTPHandler(
 		commands.NewCreateCustomerHandler(customers, infrastructure.NewEventPublisher(d.Events)),
 		commands.NewAddLoyaltyPointsHandler(customers, loyalty),
-		queries.NewCustomerQueryHandler(customers, loyalty),
+		customers,
+		loyalty,
 		d.Verifier,
 		d.RequireStore,
 	), nil

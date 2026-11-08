@@ -3,9 +3,7 @@ package commands
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -164,7 +162,6 @@ func generateRefreshToken() (raw, hash string, err error) {
 		return "", "", fmt.Errorf("generate refresh token bytes: %w", err)
 	}
 	raw = base64.RawURLEncoding.EncodeToString(b)
-	h := sha256.Sum256([]byte(raw))
-	hash = hex.EncodeToString(h[:])
-	return
+	hash = hashToken(raw)
+	return raw, hash, nil
 }

@@ -26,4 +26,3 @@ type RefreshToken struct {
 
 func (rt *RefreshToken) IsRevoked() bool { return rt.RevokedAt != nil }
 func (rt *RefreshToken) IsExpired() bool { return time.Now().After(rt.ExpiresAt) }
-func (rt *RefreshToken) IsValid() bool   { return !rt.IsRevoked() && !rt.IsExpired() }

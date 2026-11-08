@@ -83,17 +83,6 @@ func (r *RefreshTokenRepository) FindByHash(ctx context.Context, hash string) (*
 	return toRefreshToken(row), nil
 }
 
-func (r *RefreshTokenRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.RefreshToken, error) {
-	row, err := db.New(r.pool).FindRefreshTokenByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, domain.ErrNotFound
-		}
-		return nil, fmt.Errorf("find refresh token by id: %w", err)
-	}
-	return toRefreshToken(row), nil
-}
-
 func (r *RefreshTokenRepository) Revoke(ctx context.Context, id uuid.UUID, replacedBy *uuid.UUID) error {
 	if err := db.New(r.pool).RevokeRefreshToken(ctx, db.RevokeRefreshTokenParams{
 		ID:         id,

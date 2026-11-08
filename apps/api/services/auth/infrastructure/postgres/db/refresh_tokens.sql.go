@@ -89,34 +89,6 @@ func (q *Queries) FindRefreshTokenByHash(ctx context.Context, tokenHash string) 
 	return i, err
 }
 
-const findRefreshTokenByID = `-- name: FindRefreshTokenByID :one
-SELECT id, user_id, tenant_id, family_id, token_hash, issued_at, expires_at,
-       revoked_at, replaced_by, user_agent, ip_address, created_at, updated_at
-FROM auth.refresh_tokens
-WHERE id = $1
-`
-
-func (q *Queries) FindRefreshTokenByID(ctx context.Context, id uuid.UUID) (AuthRefreshToken, error) {
-	row := q.db.QueryRow(ctx, findRefreshTokenByID, id)
-	var i AuthRefreshToken
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.TenantID,
-		&i.FamilyID,
-		&i.TokenHash,
-		&i.IssuedAt,
-		&i.ExpiresAt,
-		&i.RevokedAt,
-		&i.ReplacedBy,
-		&i.UserAgent,
-		&i.IpAddress,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const listActiveSessionsByUser = `-- name: ListActiveSessionsByUser :many
 SELECT id, user_id, tenant_id, family_id, token_hash, issued_at, expires_at,
        revoked_at, replaced_by, user_agent, ip_address, created_at, updated_at

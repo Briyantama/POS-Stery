@@ -51,35 +51,6 @@ func (q *Queries) GetStoreByID(ctx context.Context, arg GetStoreByIDParams) (Get
 	return i, err
 }
 
-const getTenantByID = `-- name: GetTenantByID :one
-SELECT id, name, slug, is_active, created_at, updated_at
-FROM auth.tenants
-WHERE id = $1 AND deleted_at IS NULL
-`
-
-type GetTenantByIDRow struct {
-	ID        uuid.UUID
-	Name      string
-	Slug      string
-	IsActive  bool
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
-func (q *Queries) GetTenantByID(ctx context.Context, id uuid.UUID) (GetTenantByIDRow, error) {
-	row := q.db.QueryRow(ctx, getTenantByID, id)
-	var i GetTenantByIDRow
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Slug,
-		&i.IsActive,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const getUserByEmail = `-- name: GetUserByEmail :one
 
 SELECT id, tenant_id, email, password_hash, name, is_active, created_at, updated_at

@@ -2,14 +2,11 @@
 package auth
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 
 	"github.com/Briyantama/POS-Stery/services/auth/application/commands"
-	"github.com/Briyantama/POS-Stery/services/auth/domain"
 	"github.com/Briyantama/POS-Stery/services/auth/infrastructure/jwt"
 	"github.com/Briyantama/POS-Stery/services/auth/infrastructure/postgres"
 	"github.com/Briyantama/POS-Stery/services/auth/infrastructure/redisstore"
@@ -34,45 +31,17 @@ func Build(d Deps) (*HTTPHandler, error) {
 		commands.NewLogoutHandler(refreshTokens, signer),
 		commands.NewLogoutAllHandler(refreshTokens, signer),
 		commands.NewListSessionsHandler(refreshTokens, signer),
-		commands.NewListStoresHandler(stores),
+		stores,
 		d.Verifier,
 		d.LoginLimit,
 	), nil
-}
-
-// Service answers cross-service questions in-process (it replaces the old ValidateStore gRPC).
-type Service struct {
-	stores domain.StoreRepository
-}
-
-func NewService(stores domain.StoreRepository) *Service { return &Service{stores: stores} }
-
-// ValidateStore returns nil when the store belongs to the tenant, domain.ErrPermissionDenied when it
-// does not, and domain.ErrInvalidArgument when an id is not a UUID.
-func (s *Service) ValidateStore(ctx context.Context, tenantID, storeID string) error {
-	tid, err := uuid.Parse(tenantID)
-	if err != nil {
-		return fmt.Errorf("%w: tenant id", domain.ErrInvalidArgument)
-	}
-	sid, err := uuid.Parse(storeID)
-	if err != nil {
-		return fmt.Errorf("%w: store id", domain.ErrInvalidArgument)
-	}
-	ok, err := s.stores.ExistsInTenant(ctx, tid, sid)
-	if err != nil {
-		return fmt.Errorf("check store ownership: %w", err)
-	}
-	if !ok {
-		return domain.ErrPermissionDenied
-	}
-	return nil
 }
 
 // RequireStore resolves the store of an authenticated request and puts it in the claims.
 // Cashier tokens carry their store; otherwise the X-Store-ID header is used and must belong to
 // the caller's tenant. It must run after authn.Authenticate.
 func RequireStore(d Deps) func(http.Handler) http.Handler {
-	svc := NewService(postgres.NewStoreRepository(d.Pool))
+	stores := postgres.NewStoreRepository(d.Pool)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			claims, ok := authn.FromContext(r.Context())
@@ -86,20 +55,23 @@ func RequireStore(d Deps) func(http.Handler) http.Handler {
 					httpx.WriteError(w, http.StatusBadRequest, "store id required")
 					return
 				}
-				switch err := svc.ValidateStore(r.Context(), claims.TenantID, storeID); {
-				case err == nil:
-					claims.StoreID = storeID
-				case errors.Is(err, domain.ErrPermissionDenied):
-					httpx.WriteError(w, http.StatusForbidden, "forbidden")
-					return
-				case errors.Is(err, domain.ErrInvalidArgument):
+				tid, terr := uuid.Parse(claims.TenantID)
+				sid, serr := uuid.Parse(storeID)
+				if terr != nil || serr != nil {
 					httpx.WriteError(w, http.StatusBadRequest, "invalid store id")
 					return
-				default:
-					slog.ErrorContext(r.Context(), "validate store", "error", err, "tenant_id", claims.TenantID)
+				}
+				owns, err := stores.ExistsInTenant(r.Context(), tid, sid)
+				if err != nil {
+					slog.ErrorContext(r.Context(), "validate store", "error", fmt.Errorf("check store ownership: %w", err), "tenant_id", claims.TenantID)
 					httpx.WriteError(w, http.StatusInternalServerError, "internal error")
 					return
 				}
+				if !owns {
+					httpx.WriteError(w, http.StatusForbidden, "forbidden")
+					return
+				}
+				claims.StoreID = storeID
 			}
 			next.ServeHTTP(w, r.WithContext(authn.WithClaims(r.Context(), claims)))
 		})

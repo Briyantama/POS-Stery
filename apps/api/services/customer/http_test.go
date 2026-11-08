@@ -11,7 +11,6 @@ import (
 
 	"github.com/Briyantama/POS-Stery/services/customer"
 	"github.com/Briyantama/POS-Stery/services/customer/application/commands"
-	"github.com/Briyantama/POS-Stery/services/customer/application/queries"
 	"github.com/Briyantama/POS-Stery/services/customer/domain"
 	"github.com/Briyantama/stery-kit/go/authn"
 	"github.com/google/uuid"
@@ -55,23 +54,23 @@ func (s stubLoyalty) Handle(_ context.Context, cmd commands.AddLoyaltyPointsComm
 
 type stubQuery struct{ stub }
 
-func (s stubQuery) GetCustomer(_ context.Context, q queries.GetCustomerQuery) (*domain.Customer, error) {
+func (s stubQuery) FindByID(_ context.Context, tenantID, _ uuid.UUID) (*domain.Customer, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
-	return s.cust(q.TenantID), nil
+	return s.cust(tenantID), nil
 }
 func (stubQuery) GetTotalPoints(context.Context, uuid.UUID, uuid.UUID) (int, error) { return 5, nil }
-func (s stubQuery) ListCustomers(_ context.Context, q queries.ListCustomersQuery) (*queries.ListCustomersResult, error) {
+func (s stubQuery) List(_ context.Context, tenantID uuid.UUID, _ string, _, _ int) ([]*domain.Customer, int, error) {
 	if s.err != nil {
-		return nil, s.err
+		return nil, 0, s.err
 	}
-	return &queries.ListCustomersResult{Customers: []*domain.Customer{s.cust(q.TenantID)}, Total: 1}, nil
+	return []*domain.Customer{s.cust(tenantID)}, 1, nil
 }
 
 func newMux(err error) *http.ServeMux {
 	mux := http.NewServeMux()
-	customer.NewHTTPHandler(stub{err}, stubLoyalty{stub{err}}, stubQuery{stub{err}}, stubVerifier{}, nil).Register(mux)
+	customer.NewHTTPHandler(stub{err}, stubLoyalty{stub{err}}, stubQuery{stub{err}}, stubQuery{stub{err}}, stubVerifier{}, nil).Register(mux)
 	return mux
 }
 

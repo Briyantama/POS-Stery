@@ -15,10 +15,6 @@ type UserRepository interface {
 	ResolveTenantByEmail(ctx context.Context, email string) (TenantID, error)
 }
 
-type TenantRepository interface {
-	FindByID(ctx context.Context, id TenantID) (*Tenant, error)
-}
-
 type StoreRepository interface {
 	FindByID(ctx context.Context, tenantID TenantID, id StoreID) (*Store, error)
 	ExistsInTenant(ctx context.Context, tenantID TenantID, id StoreID) (bool, error)
@@ -29,7 +25,6 @@ type StoreRepository interface {
 type RefreshTokenRepository interface {
 	Create(ctx context.Context, rt *RefreshToken) error
 	FindByHash(ctx context.Context, hash string) (*RefreshToken, error)
-	FindByID(ctx context.Context, id uuid.UUID) (*RefreshToken, error)
 	Revoke(ctx context.Context, id uuid.UUID, replacedBy *uuid.UUID) error
 	Rotate(ctx context.Context, oldID uuid.UUID, newRT *RefreshToken) error
 	RevokeFamily(ctx context.Context, familyID uuid.UUID) error

@@ -55,14 +55,6 @@ func (r *stubRefreshTokenRepo) FindByHash(_ context.Context, hash string) (*doma
 	return rt, nil
 }
 
-func (r *stubRefreshTokenRepo) FindByID(_ context.Context, id uuid.UUID) (*domain.RefreshToken, error) {
-	rt, ok := r.byID[id]
-	if !ok {
-		return nil, domain.ErrNotFound
-	}
-	return rt, nil
-}
-
 func (r *stubRefreshTokenRepo) Revoke(_ context.Context, id uuid.UUID, replacedBy *uuid.UUID) error {
 	r.revokedIDs = append(r.revokedIDs, id)
 	if rt, ok := r.byID[id]; ok {

@@ -6,11 +6,9 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/Briyantama/POS-Stery/services/customer/application/commands"
-	"github.com/Briyantama/POS-Stery/services/customer/application/queries"
 	"github.com/Briyantama/POS-Stery/services/customer/domain"
 	"github.com/Briyantama/stery-kit/go/authn"
 	"github.com/Briyantama/stery-kit/go/httpx"
@@ -31,24 +29,28 @@ type loyaltyHandler interface {
 	Handle(ctx context.Context, cmd commands.AddLoyaltyPointsCommand) (*commands.AddLoyaltyPointsResult, error)
 }
 
-type queryHandler interface {
-	GetCustomer(ctx context.Context, q queries.GetCustomerQuery) (*domain.Customer, error)
+type customerReader interface {
+	FindByID(ctx context.Context, tenantID, id uuid.UUID) (*domain.Customer, error)
+	List(ctx context.Context, tenantID uuid.UUID, query string, limit, offset int) ([]*domain.Customer, int, error)
+}
+
+type pointsReader interface {
 	GetTotalPoints(ctx context.Context, tenantID, customerID uuid.UUID) (int, error)
-	ListCustomers(ctx context.Context, q queries.ListCustomersQuery) (*queries.ListCustomersResult, error)
 }
 
 // HTTPHandler serves /api/v1/customers.
 type HTTPHandler struct {
 	create       createHandler
 	loyalty      loyaltyHandler
-	query        queryHandler
+	customers    customerReader
+	points       pointsReader
 	verifier     authn.Verifier
 	requireStore func(http.Handler) http.Handler
 }
 
 // NewHTTPHandler builds the handler. requireStore may be nil (no store check).
-func NewHTTPHandler(c createHandler, l loyaltyHandler, q queryHandler, v authn.Verifier, requireStore func(http.Handler) http.Handler) *HTTPHandler {
-	return &HTTPHandler{create: c, loyalty: l, query: q, verifier: v, requireStore: requireStore}
+func NewHTTPHandler(c createHandler, l loyaltyHandler, customers customerReader, points pointsReader, v authn.Verifier, requireStore func(http.Handler) http.Handler) *HTTPHandler {
+	return &HTTPHandler{create: c, loyalty: l, customers: customers, points: points, verifier: v, requireStore: requireStore}
 }
 
 // Register mounts the routes; all are authenticated, roles admin and cashier.
@@ -126,41 +128,21 @@ func (h *HTTPHandler) list(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	page, perPage, ok := paging(w, r)
-	if !ok {
+	page, perPage, err := httpx.PageParams(r, defaultPerPage, maxPerPage)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	res, err := h.query.ListCustomers(r.Context(), queries.ListCustomersQuery{
-		TenantID: tid, Query: r.URL.Query().Get("q"), Limit: perPage, Offset: (page - 1) * perPage,
-	})
+	customers, total, err := h.customers.List(r.Context(), tid, r.URL.Query().Get("q"), perPage, (page-1)*perPage)
 	if err != nil {
 		writeErr(w, r, err)
 		return
 	}
-	items := make([]customerJSON, 0, len(res.Customers))
-	for _, c := range res.Customers {
+	items := make([]customerJSON, 0, len(customers))
+	for _, c := range customers {
 		items = append(items, toJSON(c, 0))
 	}
-	httpx.WriteSuccess(w, http.StatusOK, map[string]any{"items": items, "page": page, "per_page": perPage, "total": res.Total})
-}
-
-func paging(w http.ResponseWriter, r *http.Request) (page, perPage int, ok bool) {
-	page, perPage = 1, defaultPerPage
-	q := r.URL.Query()
-	var err error
-	if v := q.Get("page"); v != "" {
-		if page, err = strconv.Atoi(v); err != nil || page < 1 {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid pagination")
-			return 0, 0, false
-		}
-	}
-	if v := q.Get("per_page"); v != "" {
-		if perPage, err = strconv.Atoi(v); err != nil || perPage < 1 || perPage > maxPerPage {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid pagination")
-			return 0, 0, false
-		}
-	}
-	return page, perPage, true
+	httpx.WriteSuccess(w, http.StatusOK, map[string]any{"items": items, "page": page, "per_page": perPage, "total": total})
 }
 
 func (h *HTTPHandler) createCustomer(w http.ResponseWriter, r *http.Request) {
@@ -196,12 +178,12 @@ func (h *HTTPHandler) get(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	c, err := h.query.GetCustomer(r.Context(), queries.GetCustomerQuery{TenantID: tid, CustomerID: id})
+	c, err := h.customers.FindByID(r.Context(), tid, id)
 	if err != nil {
 		writeErr(w, r, err)
 		return
 	}
-	points, err := h.query.GetTotalPoints(r.Context(), tid, id)
+	points, err := h.points.GetTotalPoints(r.Context(), tid, id)
 	if err != nil {
 		writeErr(w, r, err)
 		return

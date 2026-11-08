@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/Briyantama/POS-Stery/services/auth/application"
@@ -40,7 +39,7 @@ type sessionLister interface {
 }
 
 type storeLister interface {
-	Handle(ctx context.Context, tenantID domain.TenantID) ([]*domain.Store, error)
+	ListByTenant(ctx context.Context, tenantID domain.TenantID) ([]*domain.Store, error)
 }
 
 // HTTPHandler serves the auth routes.
@@ -171,7 +170,7 @@ func (h *HTTPHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if r.ContentLength != 0 && !httpx.DecodeJSON(w, r, &body, maxBody) {
 		return
 	}
-	if err := h.logout.Handle(r.Context(), commands.LogoutCommand{AccessToken: bearerToken(r), RefreshToken: body.RefreshToken}); err != nil {
+	if err := h.logout.Handle(r.Context(), commands.LogoutCommand{AccessToken: authn.Bearer(r), RefreshToken: body.RefreshToken}); err != nil {
 		writeAuthError(w, r, err, "unauthorized")
 		return
 	}
@@ -179,7 +178,7 @@ func (h *HTTPHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HTTPHandler) handleLogoutAll(w http.ResponseWriter, r *http.Request) {
-	if err := h.logoutAll.Handle(r.Context(), commands.LogoutAllCommand{AccessToken: bearerToken(r)}); err != nil {
+	if err := h.logoutAll.Handle(r.Context(), commands.LogoutAllCommand{AccessToken: authn.Bearer(r)}); err != nil {
 		writeAuthError(w, r, err, "unauthorized")
 		return
 	}
@@ -187,7 +186,7 @@ func (h *HTTPHandler) handleLogoutAll(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HTTPHandler) handleSessions(w http.ResponseWriter, r *http.Request) {
-	res, err := h.sessions.Handle(r.Context(), commands.ListSessionsQuery{AccessToken: bearerToken(r)})
+	res, err := h.sessions.Handle(r.Context(), commands.ListSessionsQuery{AccessToken: authn.Bearer(r)})
 	if err != nil {
 		writeAuthError(w, r, err, "unauthorized")
 		return
@@ -215,7 +214,7 @@ func (h *HTTPHandler) handleStores(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusForbidden, "forbidden")
 		return
 	}
-	stores, err := h.stores.Handle(r.Context(), tenant)
+	stores, err := h.stores.ListByTenant(r.Context(), tenant)
 	if err != nil {
 		writeAuthError(w, r, err, "unauthorized")
 		return
@@ -251,11 +250,6 @@ func writeAuthError(w http.ResponseWriter, r *http.Request, err error, unauthent
 		slog.ErrorContext(r.Context(), "auth request failed", attrs...)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal error")
 	}
-}
-
-func bearerToken(r *http.Request) string {
-	_, token, _ := strings.Cut(r.Header.Get("Authorization"), " ")
-	return strings.TrimSpace(token)
 }
 
 // clientIP is r.RemoteAddr without the port; httpx.TrustedProxies has already resolved proxies.
