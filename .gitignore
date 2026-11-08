@@ -10,16 +10,6 @@ vendor/
 bin/
 dist/
 
-# Generated proto output — never commit individual pb files, but track go.mod/go.sum
-gen/go/**/*.pb.go
-gen/go/**/*_grpc.pb.go
-gen/go/**/*.pb.gw.go
-gen/openapi/
-
-# PHP / Composer
-apps/api-gateway/vendor/
-apps/api-gateway/node_modules/
-
 # Node / SvelteKit
 node_modules/
 .svelte-kit/
@@ -32,9 +22,6 @@ apps/cashier/.svelte-kit/
 apps/cashier/build/
 packages/ui/.svelte-kit/
 vite.config.ts.timestamp-*.mjs
-
-# pnpm
-.pnpm-store/
 
 # Environment
 .env
