@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/Briyantama/stery-kit/go/authn"
@@ -187,8 +186,9 @@ func (h *HTTPHandler) listSuppliers(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	pg, perPage, ok := pagination(w, r)
-	if !ok {
+	pg, perPage, err := httpx.PageParams(r, defaultPerPage, maxPerPage)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	list, total, err := h.suppliers.List(r.Context(), tenantID, perPage, (pg-1)*perPage)
@@ -242,8 +242,9 @@ func (h *HTTPHandler) listOrders(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	pg, perPage, ok := pagination(w, r)
-	if !ok {
+	pg, perPage, err := httpx.PageParams(r, defaultPerPage, maxPerPage)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	list, total, err := h.orders.List(r.Context(), tenantID, storeID, r.URL.Query().Get("status"), perPage, (pg-1)*perPage)
@@ -312,26 +313,6 @@ func scope(w http.ResponseWriter, r *http.Request, needStore bool) (tenantID, st
 		}
 	}
 	return tenantID, storeID, true
-}
-
-// pagination parses ?page and ?per_page (defaults 1 and 20, per_page max 100).
-func pagination(w http.ResponseWriter, r *http.Request) (pg, perPage int, ok bool) {
-	pg, perPage = 1, defaultPerPage
-	q := r.URL.Query()
-	var err error
-	if v := q.Get("page"); v != "" {
-		if pg, err = strconv.Atoi(v); err != nil || pg < 1 {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid page")
-			return 0, 0, false
-		}
-	}
-	if v := q.Get("per_page"); v != "" {
-		if perPage, err = strconv.Atoi(v); err != nil || perPage < 1 || perPage > maxPerPage {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid per_page")
-			return 0, 0, false
-		}
-	}
-	return pg, perPage, true
 }
 
 func writeDomainError(w http.ResponseWriter, r *http.Request, err error) {

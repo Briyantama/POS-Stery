@@ -64,17 +64,9 @@ func (p *stubInvPublisher) PublishLowStock(_ context.Context, _ domain.LowStockD
 	return nil
 }
 
-func (p *stubInvPublisher) PublishReplenished(_ context.Context, _, _, _ string, _ int64) error {
-	return nil
-}
-
 type failingPublisher struct{}
 
 func (p *failingPublisher) PublishLowStock(_ context.Context, _ domain.LowStockDetected) error {
-	return errors.New("nats down")
-}
-
-func (p *failingPublisher) PublishReplenished(_ context.Context, _, _, _ string, _ int64) error {
 	return errors.New("nats down")
 }
 

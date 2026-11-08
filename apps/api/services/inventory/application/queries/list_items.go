@@ -45,12 +45,7 @@ func (h *ListItemsHandler) Handle(ctx context.Context, qry ListItemsQuery) (List
 		return ListItemsResult{}, fmt.Errorf("storeID required: %w", domain.ErrInvalidArgument)
 	}
 
-	limit := qry.Limit
-	if limit <= 0 || limit > MaxPageSize {
-		limit = 50
-	}
-
-	items, total, err := h.stockRepo.ListItems(ctx, qry.TenantID, qry.StoreID, qry.LowStockOnly, limit, qry.Offset)
+	items, total, err := h.stockRepo.ListItems(ctx, qry.TenantID, qry.StoreID, qry.LowStockOnly, qry.Limit, qry.Offset)
 	if err != nil {
 		return ListItemsResult{}, fmt.Errorf("list items: %w", err)
 	}

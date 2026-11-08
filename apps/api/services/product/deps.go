@@ -19,5 +19,5 @@ type Deps struct {
 func Build(d Deps) (*HTTPHandler, error) {
 	repo := postgres.NewProductRepository(d.Pool)
 	search := queries.NewSearchProductsHandler(repo)
-	return NewHTTPHandler(commands.NewCreateProductHandler(repo), commands.NewUpdateProductHandler(repo), search, search, d.Verifier), nil
+	return NewHTTPHandler(commands.NewCreateProductHandler(repo), commands.NewUpdateProductHandler(repo), search, repo, d.Verifier), nil
 }

@@ -58,7 +58,7 @@ func (u srch) Handle(context.Context, queries.SearchProductsQuery) (*queries.Sea
 
 type get struct{ *stub }
 
-func (g get) GetByID(context.Context, uuid.UUID, uuid.UUID) (*domain.Product, error) {
+func (g get) FindByID(context.Context, uuid.UUID, uuid.UUID) (*domain.Product, error) {
 	return g.prod(), g.err
 }
 

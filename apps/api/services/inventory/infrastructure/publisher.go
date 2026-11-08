@@ -14,7 +14,6 @@ import (
 // Event types published to the pos:events stream.
 const (
 	TypeLowStock      = "Product.LowStock"
-	TypeReplenished   = "Inventory.Replenished"
 	envelopeSchemaVer = 1
 )
 
@@ -23,12 +22,6 @@ type lowStockPayload struct {
 	ProductID   string `json:"product_id"`
 	Quantity    int64  `json:"quantity"`
 	MinQuantity int64  `json:"min_quantity"`
-}
-
-type replenishedPayload struct {
-	StoreID   string `json:"store_id"`
-	ProductID string `json:"product_id"`
-	Quantity  int64  `json:"quantity"`
 }
 
 // EventPublisher publishes inventory domain events to the shared event stream.
@@ -48,15 +41,6 @@ func (p *EventPublisher) PublishLowStock(ctx context.Context, e domain.LowStockD
 		ProductID:   e.ProductID.String(),
 		Quantity:    e.Quantity,
 		MinQuantity: e.MinQuantity,
-	})
-}
-
-// PublishReplenished publishes an Inventory.Replenished event.
-func (p *EventPublisher) PublishReplenished(ctx context.Context, tenantID, storeID, productID string, quantity int64) error {
-	return p.publish(ctx, TypeReplenished, tenantID, replenishedPayload{
-		StoreID:   storeID,
-		ProductID: productID,
-		Quantity:  quantity,
 	})
 }
 

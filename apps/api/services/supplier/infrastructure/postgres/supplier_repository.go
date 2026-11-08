@@ -57,10 +57,6 @@ func (r *SupplierRepository) List(ctx context.Context, tenantID uuid.UUID, limit
 			return fmt.Errorf("count suppliers: %w", err)
 		}
 
-		if limit <= 0 || limit > 200 {
-			limit = 50
-		}
-
 		rows, err := tx.Query(ctx, `
 			SELECT id, tenant_id, name, contact, phone, email, address, created_at, updated_at
 			FROM supplier.suppliers

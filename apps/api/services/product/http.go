@@ -28,7 +28,7 @@ type searcher interface {
 	Handle(context.Context, queries.SearchProductsQuery) (*queries.SearchProductsResult, error)
 }
 type getter interface {
-	GetByID(ctx context.Context, tenantID, id uuid.UUID) (*domain.Product, error)
+	FindByID(ctx context.Context, tenantID, id uuid.UUID) (*domain.Product, error)
 }
 
 // HTTPHandler serves /api/v1/products.
@@ -153,7 +153,7 @@ func (h *HTTPHandler) getOne(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "product not found")
 		return
 	}
-	p, err := h.get.GetByID(r.Context(), tid, id)
+	p, err := h.get.FindByID(r.Context(), tid, id)
 	if err != nil {
 		fail(w, r, err)
 		return

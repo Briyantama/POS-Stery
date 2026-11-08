@@ -175,32 +175,17 @@ func (r *SaleRepository) GetReport(ctx context.Context, tenantID, storeID *uuid.
 	var report domain.SalesReport
 
 	err := pgtenant.WithTenantTx(ctx, r.pool, tenantID.String(), storeCtx, func(tx pgx.Tx) error {
-		var row pgx.Row
-		if storeID != nil {
-			row = tx.QueryRow(ctx,
-				`SELECT COALESCE(date_trunc('day', completed_at)::text, $3),
-				        COUNT(*),
-				        COALESCE(SUM(total), 0)
-				 FROM sales.sales
-				 WHERE tenant_id = $1
-				   AND store_id  = $2
-				   AND date_trunc('day', completed_at) = $3::date`,
-				tenantID, storeID, date,
-			)
-		} else {
-			row = tx.QueryRow(ctx,
-				`SELECT $2,
-				        COUNT(*),
-				        COALESCE(SUM(total), 0)
-				 FROM sales.sales
-				 WHERE tenant_id = $1
-				   AND date_trunc('day', completed_at) = $2::date`,
-				tenantID, date,
-			)
-		}
+		row := tx.QueryRow(ctx,
+			`SELECT COUNT(*),
+			        COALESCE(SUM(total), 0)
+			 FROM sales.sales
+			 WHERE tenant_id = $1
+			   AND ($2::uuid IS NULL OR store_id = $2::uuid)
+			   AND date_trunc('day', completed_at) = $3::date`,
+			tenantID, storeID, date,
+		)
 
-		var dateResult string
-		if err := row.Scan(&dateResult, &report.TransactionCount, &report.TotalRevenue); err != nil {
+		if err := row.Scan(&report.TransactionCount, &report.TotalRevenue); err != nil {
 			return fmt.Errorf("scan report: %w", err)
 		}
 		report.Date = date
@@ -209,40 +194,21 @@ func (r *SaleRepository) GetReport(ctx context.Context, tenantID, storeID *uuid.
 		}
 
 		// Top products — aggregate from sale_items joined to sales.
-		var topRows pgx.Rows
-		var err error
-		if storeID != nil {
-			topRows, err = tx.Query(ctx,
-				`SELECT si.product_id::text,
-				        ''        AS product_name,
-				        SUM(si.quantity)::int,
-				        SUM(si.line_total)
-				 FROM sales.sale_items si
-				 JOIN sales.sales s ON s.id = si.sale_id
-				 WHERE s.tenant_id = $1
-				   AND s.store_id  = $2
-				   AND date_trunc('day', s.completed_at) = $3::date
-				 GROUP BY si.product_id
-				 ORDER BY SUM(si.quantity) DESC
-				 LIMIT 10`,
-				tenantID, storeID, date,
-			)
-		} else {
-			topRows, err = tx.Query(ctx,
-				`SELECT si.product_id::text,
-				        ''        AS product_name,
-				        SUM(si.quantity)::int,
-				        SUM(si.line_total)
-				 FROM sales.sale_items si
-				 JOIN sales.sales s ON s.id = si.sale_id
-				 WHERE s.tenant_id = $1
-				   AND date_trunc('day', s.completed_at) = $2::date
-				 GROUP BY si.product_id
-				 ORDER BY SUM(si.quantity) DESC
-				 LIMIT 10`,
-				tenantID, date,
-			)
-		}
+		topRows, err := tx.Query(ctx,
+			`SELECT si.product_id::text,
+			        ''        AS product_name,
+			        SUM(si.quantity)::int,
+			        SUM(si.line_total)
+			 FROM sales.sale_items si
+			 JOIN sales.sales s ON s.id = si.sale_id
+			 WHERE s.tenant_id = $1
+			   AND ($2::uuid IS NULL OR s.store_id = $2::uuid)
+			   AND date_trunc('day', s.completed_at) = $3::date
+			 GROUP BY si.product_id
+			 ORDER BY SUM(si.quantity) DESC
+			 LIMIT 10`,
+			tenantID, storeID, date,
+		)
 		if err != nil {
 			return fmt.Errorf("query top products: %w", err)
 		}

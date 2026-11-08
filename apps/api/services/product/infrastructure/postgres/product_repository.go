@@ -11,6 +11,7 @@ import (
 	"github.com/Briyantama/stery-kit/go/pgtenant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -217,5 +218,6 @@ func nullableString(s string) *string {
 
 // isDuplicateKey checks for PostgreSQL unique-violation error code 23505.
 func isDuplicateKey(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "23505")
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }

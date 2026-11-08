@@ -33,24 +33,8 @@ func NewSearchProductsHandler(repo domain.ProductRepository) *SearchProductsHand
 	return &SearchProductsHandler{repo: repo}
 }
 
-// GetByID fetches a single product by its ID for the given tenant.
-func (h *SearchProductsHandler) GetByID(ctx context.Context, tenantID, id uuid.UUID) (*domain.Product, error) {
-	p, err := h.repo.FindByID(ctx, tenantID, id)
-	if err != nil {
-		return nil, fmt.Errorf("get product by id: %w", err)
-	}
-	return p, nil
-}
-
 // Handle executes a product search and returns the paged result.
 func (h *SearchProductsHandler) Handle(ctx context.Context, q SearchProductsQuery) (*SearchProductsResult, error) {
-	if q.Limit <= 0 {
-		q.Limit = 20
-	}
-	if q.Limit > 100 {
-		q.Limit = 100
-	}
-
 	products, total, err := h.repo.Search(ctx, q.TenantID, q.Query, q.Category, q.Limit, q.Offset)
 	if err != nil {
 		return nil, fmt.Errorf("search products: %w", err)
