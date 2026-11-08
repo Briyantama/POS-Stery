@@ -1,5 +1,5 @@
 import { redirect, type Handle } from "@sveltejs/kit";
-import { readSession } from "$lib/server/session";
+import { session as store } from "$lib/server/session";
 
 const REQUIRED_ROLE = "admin";
 
@@ -13,7 +13,7 @@ const REQUIRED_ROLE = "admin";
  * Everything else is a page load and requires a valid admin session.
  */
 export const handle: Handle = async ({ event, resolve }) => {
-  const session = readSession(event.cookies);
+  const session = store.read(event.cookies);
   event.locals.session = session;
 
   const { pathname } = event.url;

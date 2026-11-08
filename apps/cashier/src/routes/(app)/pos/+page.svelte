@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { getToken } from '$lib/session';
   import { api, ApiError } from '$lib/api';
   import { Alert, Badge, Button, Input, LoadingSpinner } from '@pos-stery/ui';
 
-  interface Product { product_id: string; name: string; sku: string; sale_price: number; base_price: number; }
+  interface Product { id: string; name: string; sku: string; sale_price: number | null; base_price: number; }
   interface CartItem extends Product { quantity: number; }
 
   /* ── Search ───────────────────────────────────────────────────── */
@@ -28,12 +27,12 @@
   let saleError     = $state('');
 
   /* ── Receipt ─────────────────────────────────────────────────── */
-  let receiptData: { sale_id: string; total_amount: number; items_count: number } | null = $state(null);
-  let receiptCart: CartItem[]   = [];
-  let receiptDiscount: number   = 0;
-  let receiptMethod: PayMethod  = 'Cash';
-  let receiptTendered: number   = 0;
-  let receiptTime: string       = '';
+  let receiptData: { sale: { id: string; total: number } } | null = $state(null);
+  let receiptCart: CartItem[]   = $state([]);
+  let receiptDiscount: number   = $state(0);
+  let receiptMethod: PayMethod  = $state('Cash');
+  let receiptTendered: number   = $state(0);
+  let receiptTime: string       = $state('');
 
   /* ── Derived ─────────────────────────────────────────────────── */
   const subtotal = $derived(cart.reduce((s, i) => s + price(i) * i.quantity, 0));
@@ -58,19 +57,18 @@
     if (!searchQuery.trim()) { searchResults = []; return; }
     searching = true;
     try {
-      const res = await api.get<{ products: Product[] }>(
-        `/products?q=${encodeURIComponent(searchQuery)}&limit=10`,
-        getToken() ?? undefined,
+      const res = await api.get<{ items: Product[] }>(
+        `/products?q=${encodeURIComponent(searchQuery)}&per_page=10`
       );
-      searchResults = res.products ?? [];
+      searchResults = res.items ?? [];
     } catch { searchResults = []; }
     finally { searching = false; }
   }
 
   function addToCart(product: Product) {
-    const existing = cart.find(i => i.product_id === product.product_id);
+    const existing = cart.find(i => i.id === product.id);
     if (existing) {
-      cart = cart.map(i => i.product_id === product.product_id ? { ...i, quantity: i.quantity + 1 } : i);
+      cart = cart.map(i => i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
     } else {
       cart = [...cart, { ...product, quantity: 1 }];
     }
@@ -80,10 +78,10 @@
 
   function updateQty(id: string, delta: number) {
     cart = cart
-      .map(i => i.product_id === id ? { ...i, quantity: i.quantity + delta } : i)
+      .map(i => i.id === id ? { ...i, quantity: i.quantity + delta } : i)
       .filter(i => i.quantity > 0);
   }
-  function removeItem(id: string) { cart = cart.filter(i => i.product_id !== id); }
+  function removeItem(id: string) { cart = cart.filter(i => i.id !== id); }
 
   /* ── Proceed to tender ── */
   function goToTender() {
@@ -100,12 +98,10 @@
       const res = await api.post<typeof receiptData>(
         '/sales',
         {
-          items: cart.map(i => ({ product_id: i.product_id, quantity: i.quantity, unit_price: price(i) })),
+          items: cart.map(i => ({ product_id: i.id, quantity: i.quantity, unit_price: price(i) })),
           customer_id:     customerId || undefined,
           discount_amount: Number(discountAmount),
-          payment_method:  payMethod,
-        },
-        getToken() ?? undefined,
+        }
       );
       receiptData     = res;
       receiptCart     = [...cart];
@@ -154,7 +150,7 @@
 
       {#if searchResults.length}
         <ul class="search-results" aria-label="Search results">
-          {#each searchResults as product (product.product_id)}
+          {#each searchResults as product (product.id)}
             <li>
               <button class="product-row" onclick={() => addToCart(product)}>
                 <span class="product-row__name">{product.name}</span>
@@ -185,21 +181,21 @@
         {:else}
           <!-- Receipt-tape cart list -->
           <ul class="receipt-lines" role="list">
-            {#each cart as item (item.product_id)}
+            {#each cart as item (item.id)}
               <li class="receipt-line">
                 <div class="receipt-line__top">
                   <span class="receipt-line__name">{item.name}</span>
                   <button
                     class="receipt-line__remove"
-                    onclick={() => removeItem(item.product_id)}
+                    onclick={() => removeItem(item.id)}
                     aria-label="Remove {item.name}"
                   >✕</button>
                 </div>
                 <div class="receipt-line__bottom">
                   <div class="qty-stepper">
-                    <button class="qty-btn" onclick={() => updateQty(item.product_id, -1)} aria-label="Decrease">−</button>
+                    <button class="qty-btn" onclick={() => updateQty(item.id, -1)} aria-label="Decrease">−</button>
                     <span class="qty-val" aria-label="Quantity: {item.quantity}">{item.quantity}</span>
-                    <button class="qty-btn" onclick={() => updateQty(item.product_id, +1)} aria-label="Increase">+</button>
+                    <button class="qty-btn" onclick={() => updateQty(item.id, +1)} aria-label="Increase">+</button>
                   </div>
                   <span class="receipt-line__unit">× {fmtIDR(price(item))}</span>
                   <span class="receipt-line__amount">{fmtIDR(price(item) * item.quantity)}</span>
@@ -326,7 +322,7 @@
           <div class="rct-header">
             <p class="rct-store">POS-Stery</p>
             <p class="rct-date">{receiptTime}</p>
-            <p class="rct-ref">{receiptData?.sale_id ?? '—'}</p>
+            <p class="rct-ref">{receiptData?.sale.id ?? '—'}</p>
           </div>
 
           <div class="rct-divider">- - - - - - - - - - - - - - -</div>
@@ -354,7 +350,7 @@
             {/if}
             <div class="rct-tot-row rct-tot-row--bold">
               <dt>Total</dt>
-              <dd>{fmtIDR(receiptData?.total_amount ?? 0)}</dd>
+              <dd>{fmtIDR(receiptData?.sale.total ?? 0)}</dd>
             </div>
             <div class="rct-tot-row">
               <dt>{receiptMethod}</dt>
@@ -367,7 +363,7 @@
             {#if receiptMethod === 'Cash'}
               <div class="rct-tot-row rct-tot-row--change">
                 <dt>Change</dt>
-                <dd>{fmtIDR(Math.max(0, receiptTendered - (receiptData?.total_amount ?? 0)))}</dd>
+                <dd>{fmtIDR(Math.max(0, receiptTendered - (receiptData?.sale.total ?? 0)))}</dd>
               </div>
             {/if}
           </dl>

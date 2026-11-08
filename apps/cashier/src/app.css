@@ -1,4 +1,37 @@
+@import "@stery/kit/styles/tokens.css";
 @import "@pos-stery/ui/tokens.css";
+
+/* POS brand on top of the shared kit tokens. Change --primary here to rebrand. */
+:root {
+  --primary: #1b3b8f;
+  --primary-foreground: #fff;
+  --accent: #e0992e;
+  --accent-foreground: #1c1917;
+  --secondary: #f0ebe1;
+  --secondary-foreground: #1a1611;
+  --background: #f4f0e8;
+  --foreground: #1a1611;
+  --surface: #fff;
+  --muted: #f0ebe1;
+  --muted-foreground: #7a7060;
+  --border: #e2dbcd;
+  --input: #cfc6b5;
+  --ring: #1b3b8f;
+  --destructive: #c0392b;
+  --destructive-foreground: #fff;
+  --success: #2e7d52;
+  --success-foreground: #fff;
+  --warning: #b5710e;
+  --warning-foreground: #fff;
+  --info: #1b3b8f;
+  --info-foreground: #fff;
+  --radius: 0.5rem;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  --z-dropdown: 50;
+  --z-modal: 100;
+  --z-toast: 200;
+}
 
 *,
 *::before,

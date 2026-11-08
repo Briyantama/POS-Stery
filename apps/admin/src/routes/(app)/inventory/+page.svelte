@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getToken } from '$lib/auth';
   import { api, ApiError } from '$lib/api';
   import { Alert, Badge, Card, PageHeader, Table } from '@pos-stery/ui';
 
@@ -18,7 +17,7 @@
     loading = true;
     try {
       const qs = lowStockOnly ? '?low_stock_only=true' : '';
-      const res = await api.get<{ items: StockItem[] }>(`/inventory${qs}`, getToken() ?? undefined);
+      const res = await api.get<{ items: StockItem[] }>(`/inventory${qs}`);
       items = res.items ?? [];
     } catch (err) {
       error = err instanceof ApiError ? err.message : 'Failed to load inventory.';

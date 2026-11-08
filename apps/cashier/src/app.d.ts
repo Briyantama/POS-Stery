@@ -1,4 +1,4 @@
-import type { Session } from "$lib/server/session";
+import type { Session } from "@stery/kit/sveltekit/session";
 
 declare global {
   namespace App {

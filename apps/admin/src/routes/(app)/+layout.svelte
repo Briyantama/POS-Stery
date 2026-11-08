@@ -1,6 +1,8 @@
 <script lang="ts">
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
+  import { onMount } from "svelte";
+  import { api } from "$lib/api";
 
   interface Props {
     children: import("svelte").Snippet;
@@ -15,6 +17,28 @@
     { href: "/customers", label: "Customers" },
     { href: "/reports", label: "Reports" },
   ];
+
+  // Store-scoped pages (inventory, sales) need a store; the BFF proxy forwards this cookie as X-Store-ID.
+  // Pages fetch in onMount, so a store change reloads the page.
+  const STORE_COOKIE = "pos_admin_store";
+  let stores = $state<{ id: string; name: string }[]>([]);
+  let storeId = $state("");
+
+  onMount(async () => {
+    storeId = document.cookie.match(/(?:^|; )pos_admin_store=([^;]*)/)?.[1] ?? "";
+    try {
+      stores = (await api.get<{ items: { id: string; name: string }[] }>("/stores")).items;
+    } catch {
+      return;
+    }
+    if (!stores.some((s) => s.id === storeId) && stores.length) selectStore(stores[0].id);
+  });
+
+  function selectStore(id: string) {
+    storeId = id;
+    document.cookie = `${STORE_COOKIE}=${encodeURIComponent(id)}; path=/; SameSite=Lax; max-age=31536000`;
+    location.reload();
+  }
 
   // The admin role is enforced server-side in hooks.server.ts; no client guard
   // is needed here. Logout clears the httpOnly session via /auth/session.
@@ -45,6 +69,14 @@
       {/each}
     </ul>
 
+    {#if stores.length}
+      <label class="sidebar__store">
+        <span>Store</span>
+        <select value={storeId} onchange={(e) => selectStore(e.currentTarget.value)}>
+          {#each stores as s (s.id)}<option value={s.id}>{s.name}</option>{/each}
+        </select>
+      </label>
+    {/if}
     <button class="sidebar__logout" onclick={logout}>Sign out</button>
   </nav>
 
@@ -162,6 +194,21 @@
   .sidebar__logout:focus-visible {
     outline: none;
     box-shadow: 0 0 0 3px rgb(255 255 255 / 0.3);
+  }
+
+  .sidebar__store {
+    display: grid;
+    gap: 0.25rem;
+    margin: 0 0.75rem 0.75rem;
+    font-size: var(--text-xs, 0.75rem);
+    color: rgb(240 235 225 / 0.65);
+  }
+  .sidebar__store select {
+    padding: 0.375rem 0.5rem;
+    border-radius: var(--radius-md, 0.375rem);
+    border: 1px solid rgb(255 255 255 / 0.15);
+    background: rgb(255 255 255 / 0.06);
+    color: var(--color-on-ink, #f0ebe1);
   }
 
   /* ---- Content area ---- */

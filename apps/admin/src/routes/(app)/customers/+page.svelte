@@ -1,10 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getToken } from '$lib/auth';
   import { api, ApiError } from '$lib/api';
   import { Alert, Card, Input, PageHeader, Table } from '@pos-stery/ui';
 
-  interface Customer { customer_id: string; name: string; phone: string; email: string; loyalty_points: number; }
+  interface Customer { id: string; name: string; phone: string; email: string; loyalty_points: number; }
 
   let customers: Customer[] = $state([]);
   let loading = $state(true);
@@ -14,8 +13,8 @@
   async function load() {
     loading = true;
     try {
-      const res = await api.get<{ customers: Customer[] }>(`/customers?q=${encodeURIComponent(search)}`, getToken() ?? undefined);
-      customers = res.customers ?? [];
+      const res = await api.get<{ items: Customer[] }>(`/customers?q=${encodeURIComponent(search)}`);
+      customers = res.items ?? [];
     } catch (err) {
       error = err instanceof ApiError ? err.message : 'Failed to load customers.';
     } finally {
@@ -44,7 +43,7 @@
       isEmpty={customers.length === 0}
       empty="No customers found."
     >
-      {#each customers as c (c.customer_id)}
+      {#each customers as c (c.id)}
         <tr>
           <td>{c.name}</td>
           <td>{c.phone ?? '—'}</td>

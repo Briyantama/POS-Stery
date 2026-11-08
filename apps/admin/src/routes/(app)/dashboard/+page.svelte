@@ -1,16 +1,15 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { getToken } from "$lib/auth";
   import { api, ApiError } from "$lib/api";
   import { Alert, Badge, LoadingSpinner } from "@pos-stery/ui";
 
   interface TopProduct {
-    name: string;
-    quantity: number;
+    product_name: string;
+    units_sold: number;
     revenue?: number;
   }
   interface Report {
-    total_sales: number;
+    transaction_count: number;
     total_revenue: number;
     top_products: TopProduct[];
     low_stock?: Array<{ name: string; sku: string; quantity: number }>;
@@ -27,8 +26,7 @@
   onMount(async () => {
     try {
       report = await api.get<Report>(
-        `/sales/report?date=${today}`,
-        getToken() ?? undefined,
+        `/sales/report?date=${today}`
       );
     } catch (err) {
       error = err instanceof ApiError ? err.message : "Failed to load report.";
@@ -82,7 +80,7 @@
       <div class="hero-left">
         <span class="hero-label">Today's Revenue</span>
         <span class="hero-value">{fmtIDR(report.total_revenue ?? 0)}</span>
-        <span class="hero-sub">{report.total_sales ?? 0} sales · {today}</span>
+        <span class="hero-sub">{report.transaction_count ?? 0} sales · {today}</span>
       </div>
       <div class="hero-spark" aria-hidden="true">
         {#each bars as h, i}
@@ -155,8 +153,8 @@
               <span class="ledger-rank" class:ledger-rank--gold={i === 0}>
                 #{String(i + 1).padStart(2, "0")}
               </span>
-              <span class="ledger-name">{product.name}</span>
-              <span class="ledger-qty">{product.quantity} sold</span>
+              <span class="ledger-name">{product.product_name}</span>
+              <span class="ledger-qty">{product.units_sold} sold</span>
               {#if product.revenue != null}
                 <span class="ledger-rev">{fmtIDR(product.revenue)}</span>
               {/if}
