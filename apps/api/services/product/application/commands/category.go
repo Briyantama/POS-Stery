@@ -8,6 +8,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// validPrice bounds money to NUMERIC(12,2) so overflow is a 422, not a Postgres 500; NaN fails too.
+func validPrice(v float64) bool { return v >= 0 && v < 1e10 }
+
 // ensureCategory rejects a category_id that does not belong to the tenant.
 func ensureCategory(ctx context.Context, repo domain.ProductRepository, tenantID uuid.UUID, categoryID *uuid.UUID) error {
 	if categoryID == nil {

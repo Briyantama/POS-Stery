@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Briyantama/POS-Stery/services/product/domain"
 	"github.com/google/uuid"
@@ -32,6 +33,7 @@ func NewCreateProductHandler(repo domain.ProductRepository) *CreateProductHandle
 
 // Handle validates the command, constructs a Product aggregate and persists it.
 func (h *CreateProductHandler) Handle(ctx context.Context, cmd CreateProductCommand) (*domain.Product, error) {
+	cmd.Name, cmd.SKU = strings.TrimSpace(cmd.Name), strings.TrimSpace(cmd.SKU)
 	if cmd.TenantID == uuid.Nil {
 		return nil, fmt.Errorf("tenant_id is required: %w", domain.ErrInvalidArgument)
 	}
@@ -41,8 +43,8 @@ func (h *CreateProductHandler) Handle(ctx context.Context, cmd CreateProductComm
 	if cmd.SKU == "" {
 		return nil, fmt.Errorf("sku is required: %w", domain.ErrInvalidArgument)
 	}
-	if cmd.BasePrice < 0 {
-		return nil, fmt.Errorf("base_price must be non-negative: %w", domain.ErrInvalidArgument)
+	if !validPrice(cmd.BasePrice) {
+		return nil, fmt.Errorf("base_price must be between 0 and 1e10: %w", domain.ErrInvalidArgument)
 	}
 	if err := ensureCategory(ctx, h.repo, cmd.TenantID, cmd.CategoryID); err != nil {
 		return nil, err

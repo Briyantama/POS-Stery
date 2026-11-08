@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Briyantama/POS-Stery/internal/db"
 	"github.com/Briyantama/POS-Stery/services/product/domain"
 	"github.com/Briyantama/stery-kit/go/pgtenant"
 	"github.com/google/uuid"
@@ -153,7 +154,7 @@ func (r *ProductRepository) Search(
 			conditions = append(conditions,
 				fmt.Sprintf("(name ILIKE $%d OR barcode = $%d)", argIdx, argIdx+1),
 			)
-			args = append(args, "%"+query+"%", query)
+			args = append(args, "%"+db.EscapeLike(query)+"%", query)
 			argIdx += 2
 		}
 

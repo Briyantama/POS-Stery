@@ -207,7 +207,7 @@ func (h *HTTPHandler) updateProduct(w http.ResponseWriter, r *http.Request) {
 		BasePrice   float64    `json:"base_price"`
 		SalePrice   *float64   `json:"sale_price"`
 		Description string     `json:"description"`
-		IsActive    bool       `json:"is_active"`
+		IsActive    *bool      `json:"is_active"`
 	}
 	if !httpx.DecodeJSON(w, r, &body, maxBody) {
 		return

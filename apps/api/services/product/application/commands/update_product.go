@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Briyantama/POS-Stery/services/product/domain"
 	"github.com/google/uuid"
@@ -18,7 +19,7 @@ type UpdateProductCommand struct {
 	BasePrice   float64
 	SalePrice   *float64
 	Description string
-	IsActive    bool
+	IsActive    *bool // nil keeps the current value
 }
 
 // UpdateProductHandler handles the UpdateProductCommand.
@@ -33,11 +34,15 @@ func NewUpdateProductHandler(repo domain.ProductRepository) *UpdateProductHandle
 
 // Handle fetches the existing product, applies the command fields and persists.
 func (h *UpdateProductHandler) Handle(ctx context.Context, cmd UpdateProductCommand) (*domain.Product, error) {
+	cmd.Name = strings.TrimSpace(cmd.Name)
 	if cmd.Name == "" {
 		return nil, fmt.Errorf("name is required: %w", domain.ErrInvalidArgument)
 	}
-	if cmd.BasePrice < 0 {
-		return nil, fmt.Errorf("base_price must be non-negative: %w", domain.ErrInvalidArgument)
+	if !validPrice(cmd.BasePrice) {
+		return nil, fmt.Errorf("base_price must be between 0 and 1e10: %w", domain.ErrInvalidArgument)
+	}
+	if cmd.SalePrice != nil && !validPrice(*cmd.SalePrice) {
+		return nil, fmt.Errorf("sale_price must be between 0 and 1e10: %w", domain.ErrInvalidArgument)
 	}
 
 	p, err := h.repo.FindByID(ctx, cmd.TenantID, cmd.ProductID)
@@ -55,7 +60,9 @@ func (h *UpdateProductHandler) Handle(ctx context.Context, cmd UpdateProductComm
 	p.BasePrice = cmd.BasePrice
 	p.SalePrice = cmd.SalePrice
 	p.Description = cmd.Description
-	p.IsActive = cmd.IsActive
+	if cmd.IsActive != nil {
+		p.IsActive = *cmd.IsActive
+	}
 
 	if err := h.repo.Update(ctx, cmd.TenantID, p); err != nil {
 		return nil, fmt.Errorf("update product: %w", err)

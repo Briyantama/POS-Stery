@@ -163,3 +163,28 @@ func TestCreateProduct_HappyPath(t *testing.T) {
 		t.Error("new product must be active")
 	}
 }
+
+func TestCreateProduct_RejectsBlankAndOutOfRange(t *testing.T) {
+	for name, mut := range map[string]func(*commands.CreateProductCommand){
+		"blank name":    func(c *commands.CreateProductCommand) { c.Name = "   " },
+		"blank sku":     func(c *commands.CreateProductCommand) { c.SKU = " " },
+		"price too big": func(c *commands.CreateProductCommand) { c.BasePrice = 1e12 },
+	} {
+		cmd := validCreateProductCmd()
+		mut(&cmd)
+		repo := &stubProductRepo{}
+		if _, err := commands.NewCreateProductHandler(repo).Handle(context.Background(), cmd); !errors.Is(err, domain.ErrInvalidArgument) || repo.writes != 0 {
+			t.Errorf("%s: err = %v, writes = %d; want ErrInvalidArgument, 0", name, err, repo.writes)
+		}
+	}
+}
+
+func TestUpdateProduct_OmittedIsActiveKeepsValue(t *testing.T) {
+	repo := &stubProductRepo{existing: &domain.Product{IsActive: true}}
+	p, err := commands.NewUpdateProductHandler(repo).Handle(context.Background(), commands.UpdateProductCommand{
+		TenantID: uuid.New(), ProductID: uuid.New(), Name: "n", BasePrice: 1,
+	})
+	if err != nil || !p.IsActive {
+		t.Fatalf("IsActive = %v, err = %v; want still active", p != nil && p.IsActive, err)
+	}
+}
