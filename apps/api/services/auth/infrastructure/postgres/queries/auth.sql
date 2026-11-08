@@ -4,7 +4,7 @@
 -- name: GetUserByEmail :one
 SELECT id, tenant_id, email, password_hash, name, is_active, created_at, updated_at
 FROM auth.users
-WHERE email = $1 AND tenant_id = $2 AND deleted_at IS NULL;
+WHERE lower(email) = lower($1) AND tenant_id = $2 AND deleted_at IS NULL;
 
 -- name: GetUserByID :one
 SELECT id, tenant_id, email, password_hash, name, is_active, created_at, updated_at
@@ -15,7 +15,8 @@ WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL;
 SELECT ur.role_id, r.name AS role_name, ur.store_id
 FROM auth.user_roles ur
 JOIN auth.roles r ON r.id = ur.role_id
-WHERE ur.user_id = $1 AND ur.tenant_id = $2;
+WHERE ur.user_id = $1 AND ur.tenant_id = $2
+ORDER BY r.name, ur.id;
 
 -- name: GetStoreByID :one
 SELECT id, tenant_id, name, address, phone, is_active, created_at, updated_at

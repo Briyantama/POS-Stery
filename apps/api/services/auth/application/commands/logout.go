@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/Briyantama/POS-Stery/services/auth/application"
@@ -39,6 +40,9 @@ func (h *LogoutHandler) Handle(ctx context.Context, cmd LogoutCommand) error {
 	if cmd.RefreshToken != "" {
 		hash := hashToken(cmd.RefreshToken)
 		rt, err := h.refreshRepo.FindByHash(ctx, hash)
+		if err != nil && !errors.Is(err, domain.ErrNotFound) {
+			return fmt.Errorf("find refresh token: %w", err)
+		}
 		if err == nil && !rt.IsRevoked() {
 			if rErr := h.refreshRepo.Revoke(ctx, rt.ID, nil); rErr != nil {
 				return fmt.Errorf("revoke refresh token: %w", rErr)

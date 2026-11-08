@@ -1,4 +1,4 @@
--- Schema snapshot for sqlc — kept in sync with migrations/000001_create_auth_schema.up.sql.
+-- Schema snapshot for sqlc — kept in sync with migrations/0011_auth_schema.sql and 0012_auth_refresh_tokens.sql.
 -- Only DDL that sqlc needs for type inference; policies, indexes and grants are omitted.
 
 CREATE SCHEMA IF NOT EXISTS auth;
@@ -45,6 +45,7 @@ CREATE TABLE auth.users (
 );
 
 CREATE TABLE auth.user_roles (
+    id        UUID NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id   UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     role_id   UUID NOT NULL REFERENCES auth.roles(id),
     store_id  UUID,

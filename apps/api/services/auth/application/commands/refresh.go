@@ -87,7 +87,8 @@ func (h *RefreshHandler) Handle(ctx context.Context, cmd RefreshCommand) (*Refre
 
 	role, storeIDPtr := user.PrimaryRole()
 	storeID := ""
-	if storeIDPtr != nil {
+	// Same claim shape as login: only cashiers carry a store.
+	if role == "cashier" && storeIDPtr != nil {
 		storeID = storeIDPtr.String()
 	}
 
