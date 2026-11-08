@@ -56,7 +56,7 @@
     </div>
 
     <ul class="sidebar__nav" role="list">
-      {#each navLinks as link}
+      {#each navLinks as link (link.href)}
         <li>
           <a
             href={link.href}

@@ -119,7 +119,7 @@
           <h2 class="ledger-title">Top Products Today</h2>
         </header>
         <ol class="ledger-list" role="list">
-          {#each report.top_products.slice(0, 5) as product, i}
+          {#each report.top_products.slice(0, 5) as product, i (product.product_name)}
             <li class="ledger-row">
               <span class="ledger-rank" class:ledger-rank--gold={i === 0}>
                 #{String(i + 1).padStart(2, "0")}
@@ -141,7 +141,7 @@
           <h2 class="ledger-title">Low Stock Watch</h2>
         </header>
         <ul class="ledger-list" role="list">
-          {#each report.low_stock as item}
+          {#each report.low_stock as item (item.sku)}
             <li class="ledger-row">
               <span class="ledger-sku">{item.sku}</span>
               <span class="ledger-name">{item.name}</span>

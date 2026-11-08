@@ -254,7 +254,7 @@
 
         <!-- Method selector -->
         <div class="method-group" role="group" aria-label="Payment method">
-          {#each (['Cash', 'QRIS', 'Debit'] as PayMethod[]) as method}
+          {#each (['Cash', 'QRIS', 'Debit'] as PayMethod[]) as method (method)}
             <button
               class="method-btn"
               class:method-btn--active={payMethod === method}
@@ -274,7 +274,7 @@
             />
             {#if QUICK_CASH.length}
               <div class="quick-cash">
-                {#each QUICK_CASH as chip}
+                {#each QUICK_CASH as chip (chip)}
                   <button class="quick-chip" onclick={() => (cashTendered = chip)}>
                     {fmtIDR(chip)}
                   </button>
@@ -329,7 +329,7 @@
 
           <!-- Line items -->
           <ul class="rct-lines" role="list">
-            {#each receiptCart as item}
+            {#each receiptCart as item (item.id)}
               <li class="rct-line">
                 <span class="rct-line__name">{item.name}</span>
                 <span class="rct-line__qty">{item.quantity}×</span>
