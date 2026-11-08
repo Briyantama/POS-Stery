@@ -7,29 +7,32 @@ Multi-tenant Point of Sale SaaS platform for retail store chains. Supports multi
 ## Architecture
 
 ```
-Browser (SvelteKit)
-    │  REST/JSON
+Browser
+    │
     ▼
-api-gateway  ← Go · chi router · RS256 JWT · Redis JTI blacklist · RBAC
-    │  gRPC (internal network)
+apps/admin, apps/cashier  ← SvelteKit server proxy, JWT in httpOnly cookies
+    │  REST /api/v1, envelope {success,data,error}
     ▼
-Go microservices  ← each owns a Postgres schema · publishes to NATS JetStream
-    │  NATS JetStream (POS_EVENTS stream)
-    ▼
-Event consumers  ← Sale.Completed · Product.LowStock · Inventory.Replenished
+apps/api  ← one Go binary: net/http ServeMux, RS256 JWT, jti blacklist, roles, rate limits
+    │  packages auth, product, inventory, sales, supplier, customer (in-process calls)
+    ├── PostgreSQL 18, one schema per package, RLS
+    └── Dragonfly: jti blacklist, rate limits, event stream pos:events
 ```
 
-### Services
+Decisions: `docs/adr/0001-single-module-go-api-on-sela-stack.md`, `docs/adr/0002-dragonfly-streams-replace-nats-jetstream.md`.
 
-| Service | Port | Responsibility |
-|---|---|---|
-| `api-gateway` | 8000 | HTTP gateway, auth middleware, RBAC, route proxy to gRPC backends |
-| `auth-service` | 8081 | Tenants, stores, users, roles, JWT issue/refresh/revoke |
-| `product-service` | 8082 | Product catalog, SKU management |
-| `inventory-service` | 8083 | Stock levels, thresholds, low-stock events |
-| `sales-service` | 8084 | Sales, receipts, saga with inventory deduction |
-| `supplier-service` | 8085 | Suppliers, purchase orders, replenishment |
-| `customer-service` | 8086 | Customer records, loyalty points |
+### API packages (`apps/api/services/<name>`)
+
+| Package | Responsibility |
+|---|---|
+| `auth` | Tenants, stores, users, roles, JWT issue/refresh/revoke, store validation |
+| `product` | Product catalog, SKU management |
+| `inventory` | Stock levels, thresholds, low-stock events |
+| `sales` | Sales, receipts, stock deduction through `inventory` |
+| `supplier` | Suppliers, purchase orders, replenishment |
+| `customer` | Customer records, loyalty points |
+
+Shared Go and web code comes from the sibling repo `stery-kit` (Go module `github.com/Briyantama/stery-kit/go`, npm package `@stery/kit`). Clone it next to this repo: `../stery-kit`.
 
 ### Frontend Apps
 
@@ -40,7 +43,7 @@ Event consumers  ← Sale.Completed · Product.LowStock · Inventory.Replenished
 
 ### Observability
 
-Jaeger (tracing), Prometheus (metrics, per-service ports 9101–9106), structured logging via OpenTelemetry.
+`log/slog` structured logs and `GET /healthz`. No metrics or tracing.
 
 ---
 
@@ -48,14 +51,11 @@ Jaeger (tracing), Prometheus (metrics, per-service ports 9101–9106), structure
 
 | Tool | Version | Notes |
 |---|---|---|
-| Docker + Docker Compose | latest | Required for infra |
-| Go | 1.22+ | For backend services |
-| Node.js | 20+ | For SvelteKit apps |
-| pnpm | 9+ | Package manager for frontend |
-| `buf` | latest | Protobuf toolchain |
-| `golang-migrate` | v4 | Database migrations |
-| `sqlc` | latest | SQL code generation |
-| PM2 | latest | Process manager for local dev |
+| Docker + Docker Compose | latest | Runs Dragonfly |
+| PostgreSQL | 18 | Runs outside compose |
+| Go | 1.25.1+ | API |
+| Node.js | 20.19+ | SvelteKit apps (npm) |
+| PM2 | latest | Optional, local process manager |
 
 ---
 
@@ -64,7 +64,8 @@ Jaeger (tracing), Prometheus (metrics, per-service ports 9101–9106), structure
 ### 1. Clone and configure
 
 ```bash
-git clone <repo-url>
+git clone <repo-url> POS-Stery
+git clone git@github.com:Briyantama/stery-kit.git stery-kit
 cd POS-Stery
 cp .env.example .env
 ```
@@ -77,229 +78,106 @@ openssl genrsa -out keys/private.pem 2048
 openssl rsa -in keys/private.pem -pubout -out keys/public.pem
 ```
 
-### 2. Start infrastructure
+### 2. Run
 
 ```bash
-make dev
+make up        # Dragonfly via compose, migrate up, API on :8000 in the background
+make status    # API pid + /healthz
+make down      # stop API and compose
 ```
 
-Starts Postgres 16, Redis 7, NATS 2.10, Jaeger, and Prometheus via Docker Compose.
-
-### 3. Initialize database
+Frontends:
 
 ```bash
-make db-init       # Create pos_admin and pos_app roles
-make migrate-up    # Apply all migrations
+cd apps/admin && npm install && npm run dev      # :5173
+cd apps/cashier && npm install && npm run dev    # :5174
 ```
-
-### 4. Build and run
-
-```bash
-make all           # proto-gen + migrate-up + build-go + install frontend deps
-```
-
-Then start all services with PM2:
-
-```bash
-npm install -g pm2          # install once globally
-pm2 start ecosystem.config.cjs
-pm2 status
-```
-
-| Process | Port | URL |
-|---|---|---|
-| `pos-admin-5173` | 5173 | <http://localhost:5173> — Admin dashboard |
-| `pos-cashier-5174` | 5174 | <http://localhost:5174> — Cashier POS |
-| `pos-gateway-8000` | 8000 | <http://localhost:8000> — API gateway |
-| `pos-auth-8081` | 8081 | Auth service (gRPC) |
-| `pos-product-8082` | 8082 | Product service (gRPC) |
-| `pos-inventory-8083` | 8083 | Inventory service (gRPC) |
-| `pos-sales-8084` | 8084 | Sales service (gRPC) |
-| `pos-supplier-8085` | 8085 | Supplier service (gRPC) |
-| `pos-customer-8086` | 8086 | Customer service (gRPC) |
 
 ---
 
 ## Development
 
-### Infrastructure lifecycle
+### API (`apps/api`)
 
 ```bash
-make dev           # Start infra containers
-make dev-down      # Stop infra containers
-make dev-reset     # DESTRUCTIVE: destroy volumes + restart
+go run ./cmd/migrate up          # or down; reads DATABASE_URL
+go run ./cmd/api                 # :8000
+go test ./...                    # DB tests need TEST_DATABASE_URL, skipped otherwise
+gofmt -l . && go vet ./...
 ```
 
-### Protobuf
+`make build` writes `.run/api`. `make check` runs `scripts/check.sh` (gofmt, vet, golangci-lint, tests, `npm run check`, Vitest); the full gate runs in GitHub CI.
 
-```bash
-make proto-gen      # buf generate → gen/go/ and gen/openapi/
-make proto-lint     # buf lint
-make proto-breaking # Check for breaking changes against main
-```
-
-Always run `make proto-gen && make proto-lint` after editing any `.proto` file. Never hand-edit files under `gen/`.
-
-### Database migrations
-
-```bash
-make migrate-up                                     # Apply all pending
-make migrate-down                                   # Roll back one step per service
-make migrate-create NAME=add_index SERVICE=product  # Create new migration pair
-make migrate-fresh                                  # DESTRUCTIVE: drop + reapply all
-```
-
-Migrations live in `services/<name>-service/migrations/`.
-
-### Go services
-
-```bash
-make build-go          # Build all services
-make test-go           # go test -short ./...
-make test-integration  # INTEGRATION=true go test ./...
-make lint-go           # golangci-lint
-make tidy              # go mod tidy across all workspace members
-make sqlc-gen          # sqlc generate for all services
-```
-
-Run tests for a single service:
-
-```bash
-cd services/inventory-service && go test ./internal/application/commands/...
-```
+Migrations are goose files in `apps/api/internal/db/migrations/NNNN_name.sql` with `-- +goose Up` and `-- +goose Down` sections.
 
 ### SvelteKit apps
 
-```bash
-make install-admin     # pnpm install in apps/admin
-make dev-admin         # pnpm dev (admin, :5173)
-make install-cashier   # pnpm install in apps/cashier
-make dev-cashier       # pnpm dev (cashier, :5174)
-```
+`npm run dev`, `npm run check`, `npm run build`, `npm run test:unit` in `apps/admin` or `apps/cashier`.
 
 ### PM2
 
-`ecosystem.config.cjs` defines all 9 processes (2 frontend, 1 gateway, 6 backend services). PM2 must be running while `make dev` infra containers are up.
+`ecosystem.config.cjs` defines three processes and reads secrets from `.env`:
 
-**Start / stop all**
-
-```bash
-pm2 start ecosystem.config.cjs   # First run — loads config and starts everything
-pm2 restart all                  # Restart all processes
-pm2 stop all                     # Stop all (keeps processes in list)
-pm2 delete all                   # Remove all from PM2 list
-```
-
-**Start / stop individual processes**
+| Name | Port | |
+|---|---|---|
+| `pos-api-8000` | 8000 | Go API (`go run ./cmd/api` in `apps/api`) |
+| `pos-admin-5173` | 5173 | Admin dashboard |
+| `pos-cashier-5174` | 5174 | Cashier POS |
 
 ```bash
-pm2 start pos-admin-5173
-pm2 start pos-cashier-5174
-pm2 start pos-gateway-8000
-pm2 start pos-auth-8081
-pm2 start pos-product-8082
-pm2 start pos-inventory-8083
-pm2 start pos-sales-8084
-pm2 start pos-supplier-8085
-pm2 start pos-customer-8086
-
-pm2 stop pos-gateway-8000        # Stop one process by name
-pm2 restart pos-auth-8081        # Restart one process by name
-```
-
-**Logs and monitoring**
-
-```bash
-pm2 logs                         # Tail logs from all processes
-pm2 logs pos-auth-8081           # Tail logs for one process
-pm2 logs --lines 200             # Show last 200 lines
-pm2 status                       # Process table (pid, status, cpu, memory)
-pm2 monit                        # Real-time dashboard in terminal
-```
-
-**Persist across reboots**
-
-```bash
-pm2 save                         # Save current process list
-pm2 resurrect                    # Restore saved list
-pm2 startup                      # Generate OS startup hook (run output as root/admin)
+pm2 start ecosystem.config.cjs
+pm2 restart all
+pm2 logs pos-api-8000
+pm2 status
 ```
 
 ---
 
 ## Tenant Isolation
 
-Isolation is enforced at four layers:
-
-1. **Gateway** — `TenantResolver` and `StoreResolver` middleware validate JWT claims and confirm `store_id` belongs to the authenticated tenant.
-2. **gRPC contracts** — every request message includes `tenant_id` and `store_id`.
-3. **Service layer** — command/query handlers pass both IDs through to the repository.
-4. **Database** — PostgreSQL RLS on every tenant-scoped table. The `_shared/database` package calls `WithTenantContext(ctx, tenantID, storeID)` before every query to inject `SET LOCAL app.tenant_id` and `SET LOCAL app.store_id`.
-
-Two DB roles: `pos_admin` (BYPASSRLS — migrations only) and `pos_app` (subject to RLS — all application code).
+1. **Middleware**: the JWT is verified locally; tenant and store ids come from its claims, and an admin's `X-Store-ID` is checked against the tenant by the `auth` package.
+2. **Handlers**: tenant and actor ids are read from the request context, never from the body.
+3. **Database**: PostgreSQL RLS on every tenant-scoped table. Repositories run inside `WithTenantTx`, which sets `app.tenant_id` and `app.store_id` with `set_config(..., true)`.
 
 ---
 
 ## Database Layout
 
-Single Postgres instance, one schema per service:
+Single Postgres database, one schema per package:
 
-| Schema | Service |
+| Schema | Package |
 |---|---|
-| `auth` | auth-service — tenants, stores, users, roles |
-| `product` | product-service |
-| `inventory` | inventory-service |
-| `sales` | sales-service |
-| `supplier` | supplier-service |
-| `customer` | customer-service |
+| `auth` | auth: tenants, stores, users, roles |
+| `product` | product |
+| `inventory` | inventory |
+| `sales` | sales |
+| `supplier` | supplier |
+| `customer` | customer |
 
-No cross-schema foreign keys. Services reference other domains by UUID only.
+No cross-schema foreign keys. Packages reference other domains by UUID only. Roles: `pos_admin` (BYPASSRLS, migrations), `pos_app` (RLS-bound, application).
 
 ---
 
 ## Key Business Rules
 
-- **Stock never goes negative** — enforced in `inventory-service` domain layer before any DB write.
-- **Every sale produces a receipt** — JSON snapshot stored in `sales.receipts`.
+- **Stock never goes negative**: checked in inventory's `UpdateStockHandler` before any DB write.
+- **Every sale produces a receipt**: JSON snapshot stored in `sales.receipts`.
 - **Loyalty points update only after a committed sale.**
 - **All report queries are scoped by `tenant_id` and `store_id`.**
-- **Phase 1 has no self-service signup** — tenants are seeded via console.
+- **Phase 1 has no self-service signup**: tenants are seeded via console.
 
 ---
 
-## Service Internal Layout
+## Events
 
-Each Go service follows hexagonal architecture:
+Dragonfly stream `pos:events`, published after commit. No consumers yet.
 
-```
-internal/
-  domain/           — aggregates, value objects, domain events, repository interfaces
-  application/
-    commands/       — write path: Command struct + Handler
-    queries/        — read path: Query struct + Handler
-    ports.go        — EventPublisher interface
-  interfaces/grpc/  — gRPC server implementation
-  infrastructure/
-    postgres/       — pgx repository + sqlc-generated queries
-    grpc_clients/   — downstream gRPC clients (sales, supplier only)
-    nats_publisher.go
-```
-
-Business rules live only in `domain/` and `application/commands/`. Infrastructure adapters implement the ports.
-
----
-
-## NATS Events
-
-Stream `POS_EVENTS`, file storage, 7-day retention:
-
-| Subject | Publisher |
+| Type | Publisher |
 |---|---|
-| `Product.LowStock` | inventory-service |
-| `Sale.Completed` | sales-service |
-| `Inventory.Replenished` | supplier-service |
-| `Customer.New` | customer-service |
-| `AI.OrderForecasted` | ai-service (Phase 2) |
+| `Product.LowStock` | inventory |
+| `Sale.Completed` | sales |
+| `Inventory.Replenished` | supplier |
+| `Customer.New` | customer |
 
 ---
 
@@ -309,9 +187,10 @@ Copy `.env.example` to `.env`. Key variables:
 
 | Variable | Description |
 |---|---|
-| `POSTGRES_APP_PASSWORD` | Password for `pos_app` role |
-| `JWT_RS256_PRIVATE_KEY_PATH` | Path to RS256 private key |
-| `SERVICE_TOKEN_SECRET` | HMAC-SHA256 secret for service-to-service auth |
-| `PUBLIC_GATEWAY_URL` | Gateway URL for SvelteKit apps (default `http://localhost:8000`) |
-| `NATS_URL` | NATS connection string |
-| `REDIS_ADDR` | Redis address |
+| `PORT` | API port (default 8000) |
+| `DATABASE_URL` | Postgres connection URL for the API and `cmd/migrate` |
+| `REDIS_ADDR`, `REDIS_PASSWORD`, `REDIS_TLS` | Dragonfly connection |
+| `JWT_RS256_PRIVATE_KEY_PATH`, `JWT_RS256_PUBLIC_KEY_PATH` | RS256 key files |
+| `TRUSTED_PROXY_CIDRS` | Proxies whose forwarded client IP is trusted |
+| `GATEWAY_URL` | API base URL for the SvelteKit server proxy (default `http://localhost:8000`) |
+| `TEST_DATABASE_URL` | Postgres URL for DB tests |

@@ -190,17 +190,15 @@ All services must enforce tenant filtering at API, service, repository, and even
 
 ## 10. Architecture
 
-### 10.1 Suggested Stack
+### 10.1 Stack
 
-- Laravel gateway for auth and HTTP API.
-- Go microservices for domain logic.
-- gRPC between gateway and services.
-- NATS for event-driven communication.
-- Postgres for transactional storage.
-- Redis for cache/session/ephemeral needs.
-- Elasticsearch optional for search.
-- MinIO optional for object storage.
-- SvelteKit frontend.
+Replaced on 2026-11-08 by the SELA stack (ADR-0001, ADR-0002); the Laravel gateway, gRPC, NATS and MinIO are gone.
+
+- One Go module `apps/api` (one binary, `cmd/api` + `cmd/migrate`); the services below are packages under `apps/api/services/<name>`.
+- REST `/api/v1` on `net/http` ServeMux with the `{success,data,error}` envelope; RS256 JWT verified in the API.
+- Postgres 18 with goose migrations embedded in the binary.
+- Dragonfly for the token revocation list, rate limits and the `pos:events` stream.
+- SvelteKit admin and cashier apps behind a server-side `/api` proxy; shared code from `stery-kit`.
 
 ### 10.2 Services
 
@@ -215,7 +213,7 @@ All services must enforce tenant filtering at API, service, repository, and even
 
 ### 10.3 Event Bus
 
-NATS subjects:
+Event types on the `pos:events` stream:
 
 - `Product.LowStock`
 - `Sale.Completed`
@@ -225,7 +223,9 @@ NATS subjects:
 
 ## 11. API Contracts
 
-### 11.1 gRPC Services
+### 11.1 Service operations
+
+Application handlers inside `apps/api/services/<name>` (no gRPC):
 
 - AuthService: Login, Validate
 - ProductService: CreateProduct, SearchProducts, UpdateProduct
@@ -236,7 +236,9 @@ NATS subjects:
 - NotificationService: event consumption / push notifications
 - AIService: ForecastDemand, RecognizeProduct, ChatSupport
 
-### 11.2 REST Gateway
+### 11.2 REST API
+
+Served by the Go API under `/api/v1` (the frontends reach it as `/api/...` through their proxy). Route table: `docs/aidlc/intents/261108-stack-align-sela/05-units-of-work.md`.
 
 - `POST /api/login`
 - `POST /api/logout`

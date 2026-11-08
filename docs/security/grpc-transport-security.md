@@ -1,3 +1,5 @@
+Superseded 2026-11-08 by docs/adr/0001-single-module-go-api-on-sela-stack.md
+
 # gRPC Transport Security
 
 ## Decision: Plaintext transport with application-layer service identity
