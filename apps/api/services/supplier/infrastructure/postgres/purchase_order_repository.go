@@ -205,7 +205,7 @@ func (r *PurchaseOrderRepository) ReceiveOrder(
 				return fmt.Errorf("update received quantity for product %s: %w", line.ProductID, err)
 			}
 			if tag.RowsAffected() == 0 {
-				continue // product is not on this order
+				return fmt.Errorf("product %s is not on this order: %w", line.ProductID, domain.ErrInvalidArgument)
 			}
 
 			tag, err = tx.Exec(ctx, `

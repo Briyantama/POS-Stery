@@ -70,6 +70,9 @@ func (h *CreatePurchaseOrderHandler) Handle(ctx context.Context, cmd CreatePurch
 		if line.QuantityOrdered <= 0 {
 			return nil, fmt.Errorf("item quantity_ordered must be > 0: %w", domain.ErrInvalidArgument)
 		}
+		if !(line.UnitCost >= 0 && line.UnitCost < 1e10) {
+			return nil, fmt.Errorf("item unit_cost must be between 0 and 1e10: %w", domain.ErrInvalidArgument)
+		}
 		items = append(items, &domain.PurchaseOrderItem{
 			TenantID:        cmd.TenantID,
 			PurchaseOrderID: orderID,
