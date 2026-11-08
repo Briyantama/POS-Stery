@@ -13,19 +13,28 @@ import (
 // ── stubs ──────────────────────────────────────────────────────────────────────
 
 type stubProductRepo struct {
-	createErr error
+	createErr       error
+	foreignCategory bool // CategoryExists reports false (category owned by another tenant)
+	existing        *domain.Product
+	writes          int
 }
 
 func (r *stubProductRepo) Create(_ context.Context, _ uuid.UUID, _ *domain.Product) error {
+	r.writes++
 	return r.createErr
 }
 
 func (r *stubProductRepo) Update(_ context.Context, _ uuid.UUID, _ *domain.Product) error {
+	r.writes++
 	return nil
 }
 
 func (r *stubProductRepo) FindByID(_ context.Context, _, _ uuid.UUID) (*domain.Product, error) {
-	return nil, nil
+	return r.existing, nil
+}
+
+func (r *stubProductRepo) CategoryExists(_ context.Context, _, _ uuid.UUID) (bool, error) {
+	return !r.foreignCategory, nil
 }
 
 func (r *stubProductRepo) Search(_ context.Context, _ uuid.UUID, _, _ string, _, _ int) ([]*domain.Product, int, error) {
@@ -92,6 +101,37 @@ func TestCreateProduct_DuplicateSKU(t *testing.T) {
 	_, err := commands.NewCreateProductHandler(repo).Handle(context.Background(), cmd)
 	if !errors.Is(err, domain.ErrAlreadyExists) {
 		t.Fatalf("want ErrAlreadyExists for duplicate SKU, got %v", err)
+	}
+}
+
+func TestCreateProduct_CategoryOfOtherTenant(t *testing.T) {
+	repo := &stubProductRepo{foreignCategory: true}
+	cmd := validCreateProductCmd()
+	catID := uuid.New()
+	cmd.CategoryID = &catID
+
+	_, err := commands.NewCreateProductHandler(repo).Handle(context.Background(), cmd)
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("want ErrInvalidArgument for foreign category, got %v", err)
+	}
+	if repo.writes != 0 {
+		t.Fatal("product must not be written")
+	}
+}
+
+func TestUpdateProduct_CategoryOfOtherTenant(t *testing.T) {
+	tenant := uuid.New()
+	repo := &stubProductRepo{foreignCategory: true, existing: &domain.Product{ID: uuid.New(), TenantID: tenant}}
+	catID := uuid.New()
+
+	_, err := commands.NewUpdateProductHandler(repo).Handle(context.Background(), commands.UpdateProductCommand{
+		TenantID: tenant, ProductID: repo.existing.ID, CategoryID: &catID, Name: "Widget",
+	})
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("want ErrInvalidArgument for foreign category, got %v", err)
+	}
+	if repo.writes != 0 {
+		t.Fatal("product must not be written")
 	}
 }
 

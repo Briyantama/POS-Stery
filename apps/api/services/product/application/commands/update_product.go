@@ -45,6 +45,10 @@ func (h *UpdateProductHandler) Handle(ctx context.Context, cmd UpdateProductComm
 		return nil, fmt.Errorf("find product: %w", err)
 	}
 
+	if err := ensureCategory(ctx, h.repo, cmd.TenantID, cmd.CategoryID); err != nil {
+		return nil, err
+	}
+
 	p.CategoryID = cmd.CategoryID
 	p.Name = cmd.Name
 	p.Barcode = cmd.Barcode

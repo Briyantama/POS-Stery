@@ -44,6 +44,9 @@ func (h *CreateProductHandler) Handle(ctx context.Context, cmd CreateProductComm
 	if cmd.BasePrice < 0 {
 		return nil, fmt.Errorf("base_price must be non-negative: %w", domain.ErrInvalidArgument)
 	}
+	if err := ensureCategory(ctx, h.repo, cmd.TenantID, cmd.CategoryID); err != nil {
+		return nil, err
+	}
 
 	p := &domain.Product{
 		ID:          uuid.New(),

@@ -46,6 +46,9 @@ func (r *ProductRepository) Create(ctx context.Context, tenantID uuid.UUID, p *d
 			if isDuplicateKey(err) {
 				return fmt.Errorf("product with sku %q: %w", p.SKU, domain.ErrAlreadyExists)
 			}
+			if isForeignKeyViolation(err) {
+				return fmt.Errorf("category_id does not exist: %w", domain.ErrInvalidArgument)
+			}
 			return fmt.Errorf("insert product: %w", err)
 		}
 		return nil
@@ -74,6 +77,9 @@ func (r *ProductRepository) Update(ctx context.Context, tenantID uuid.UUID, p *d
 			p.ID, p.TenantID,
 		)
 		if err != nil {
+			if isForeignKeyViolation(err) {
+				return fmt.Errorf("category_id does not exist: %w", domain.ErrInvalidArgument)
+			}
 			return fmt.Errorf("update product: %w", err)
 		}
 		if tag.RowsAffected() == 0 {
@@ -110,6 +116,20 @@ func (r *ProductRepository) FindByID(ctx context.Context, tenantID, id uuid.UUID
 		return nil, err
 	}
 	return p, nil
+}
+
+// CategoryExists reports whether the category belongs to tenantID (queried under RLS).
+func (r *ProductRepository) CategoryExists(ctx context.Context, tenantID, categoryID uuid.UUID) (bool, error) {
+	var ok bool
+	err := pgtenant.WithTenantTx(ctx, r.pool, tenantID.String(), "", func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT EXISTS (SELECT 1 FROM product.categories WHERE id = $1 AND tenant_id = $2)`,
+			categoryID, tenantID).Scan(&ok)
+	})
+	if err != nil {
+		return false, fmt.Errorf("check category: %w", err)
+	}
+	return ok, nil
 }
 
 // Search returns products matching the optional query/category with pagination.
@@ -220,4 +240,10 @@ func nullableString(s string) *string {
 func isDuplicateKey(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+// isForeignKeyViolation checks for PostgreSQL foreign-key error code 23503.
+func isForeignKeyViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23503"
 }

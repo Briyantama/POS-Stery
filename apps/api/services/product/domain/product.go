@@ -37,6 +37,10 @@ type ProductRepository interface {
 	// Returns ErrNotFound when no matching row exists.
 	FindByID(ctx context.Context, tenantID, id uuid.UUID) (*Product, error)
 
+	// CategoryExists reports whether categoryID belongs to tenantID. The products.category_id
+	// FK is checked without RLS, so cross-tenant references must be rejected here.
+	CategoryExists(ctx context.Context, tenantID, categoryID uuid.UUID) (bool, error)
+
 	// Search returns products matching the optional query string (ILIKE on name /
 	// exact on barcode) and optional category filter. It also returns the total
 	// count before paging so callers can build pagination responses.
