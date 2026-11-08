@@ -1,4 +1,4 @@
-Restart Go API gateway (8000).
+Restart Go API (8000).
 ```bash
-cd "C:/Users/solui/moon-eye/POS-Stery" && pm2 restart pos-gateway-8000
+cd "C:/Users/solui/moon-eye/stery-suite/POS-Stery" && pm2 restart pos-api-8000
 ```

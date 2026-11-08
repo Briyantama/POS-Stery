@@ -1,2 +1,2 @@
-Set-Location "C:/Users/solui/moon-eye/POS-Stery"
+Set-Location "C:/Users/solui/moon-eye/stery-suite/POS-Stery"
 pm2 logs pos-cashier-5174
