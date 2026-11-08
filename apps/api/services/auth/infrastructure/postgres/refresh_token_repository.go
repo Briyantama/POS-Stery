@@ -17,7 +17,7 @@ func (r *RefreshTokenRepository) Rotate(ctx context.Context, oldID uuid.UUID, ne
 	if err != nil {
 		return fmt.Errorf("begin rotation transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }() // no-op after Commit
 
 	q := db.New(tx)
 
