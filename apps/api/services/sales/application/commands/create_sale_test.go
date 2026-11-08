@@ -46,6 +46,16 @@ func (s *stubSaleRepo) GetReport(_ context.Context, _, _ *uuid.UUID, _ string) (
 	return nil, nil
 }
 
+// stubPrices charges every product 10.00 unless overridden.
+type stubPrices struct{ price float64 }
+
+func (s stubPrices) UnitPrice(_ context.Context, _, _ uuid.UUID) (float64, error) {
+	if s.price == 0 {
+		return 10, nil
+	}
+	return s.price, nil
+}
+
 type stubPublisher struct{ published bool }
 
 func (s *stubPublisher) PublishSaleCompleted(_ context.Context, _ *domain.Sale) error {
@@ -61,13 +71,13 @@ func validCmd() commands.CreateSaleCommand {
 		StoreID:   uuid.New().String(),
 		CashierID: uuid.New().String(),
 		Items: []commands.SaleItemInput{
-			{ProductID: uuid.New().String(), Quantity: 2, UnitPrice: 10.0},
+			{ProductID: uuid.New().String(), Quantity: 2},
 		},
 	}
 }
 
 func newHandler(inv *stubInventory, repo *stubSaleRepo, pub *stubPublisher) *commands.CreateSaleHandler {
-	return commands.NewCreateSaleHandler(repo, inv, pub)
+	return commands.NewCreateSaleHandler(repo, inv, stubPrices{}, pub)
 }
 
 // ---- tests ----
@@ -120,7 +130,7 @@ func TestCreateSaleHandler_StockShortage(t *testing.T) {
 func TestCreateSaleHandler_DBFailureTriggersCompensation(t *testing.T) {
 	cmd := validCmd()
 	cmd.Items = append(cmd.Items, commands.SaleItemInput{
-		ProductID: uuid.New().String(), Quantity: 1, UnitPrice: 5.0,
+		ProductID: uuid.New().String(), Quantity: 1,
 	})
 
 	inv := &stubInventory{}
@@ -142,7 +152,7 @@ func TestCreateSaleHandler_DBFailureTriggersCompensation(t *testing.T) {
 func TestCreateSaleHandler_HappyPath(t *testing.T) {
 	cmd := validCmd()
 	cmd.Items = []commands.SaleItemInput{
-		{ProductID: uuid.New().String(), Quantity: 3, UnitPrice: 10.0, Discount: 1.0},
+		{ProductID: uuid.New().String(), Quantity: 3, Discount: 1.0},
 	}
 
 	inv := &stubInventory{}
@@ -171,18 +181,36 @@ func TestCreateSaleHandler_HappyPath(t *testing.T) {
 	}
 }
 
-func TestCreateSaleHandler_NegativeTotalClampedToZero(t *testing.T) {
-	cmd := validCmd()
-	cmd.Items = []commands.SaleItemInput{
-		{ProductID: uuid.New().String(), Quantity: 1, UnitPrice: 5.0},
-	}
-	cmd.DiscountAmount = 100.0 // discount > subtotal
-
+func TestCreateSaleHandler_ChargesProductPrice(t *testing.T) {
+	// The client has no way to send a price; the product price (10) is what is charged.
+	cmd := validCmd() // qty 2
 	res, err := newHandler(&stubInventory{}, &stubSaleRepo{}, &stubPublisher{}).Handle(context.Background(), cmd)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if res.Sale.Total != 0.0 {
-		t.Errorf("want total=0 when discount exceeds subtotal, got %v", res.Sale.Total)
+	if got := res.Sale.Items[0].UnitPrice; got != 10 {
+		t.Errorf("want unit_price=10 from product, got %v", got)
+	}
+	if res.Sale.Total != 20 {
+		t.Errorf("want total=20, got %v", res.Sale.Total)
+	}
+}
+
+func TestCreateSaleHandler_InvalidDiscounts(t *testing.T) {
+	for name, mutate := range map[string]func(*commands.CreateSaleCommand){
+		"negative item discount":    func(c *commands.CreateSaleCommand) { c.Items[0].Discount = -1 },
+		"item discount > line":      func(c *commands.CreateSaleCommand) { c.Items[0].Discount = 20.01 },
+		"order discount > subtotal": func(c *commands.CreateSaleCommand) { c.DiscountAmount = 20.01 },
+	} {
+		cmd := validCmd() // line total 20
+		mutate(&cmd)
+		inv := &stubInventory{}
+		_, err := newHandler(inv, &stubSaleRepo{}, &stubPublisher{}).Handle(context.Background(), cmd)
+		if !errors.Is(err, domain.ErrInvalidArgument) {
+			t.Errorf("%s: want ErrInvalidArgument, got %v", name, err)
+		}
+		if inv.deductCalls != 0 {
+			t.Errorf("%s: stock must not be touched", name)
+		}
 	}
 }

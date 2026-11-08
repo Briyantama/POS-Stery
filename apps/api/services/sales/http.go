@@ -57,7 +57,7 @@ func (h *HTTPHandler) guard(fn http.HandlerFunc, roles ...string) http.Handler {
 type saleItemBody struct {
 	ProductID string  `json:"product_id"`
 	Quantity  int     `json:"quantity"`
-	UnitPrice float64 `json:"unit_price"`
+	UnitPrice float64 `json:"unit_price"` // accepted for client compatibility, ignored: price comes from the product
 	Discount  float64 `json:"discount"`
 }
 
@@ -138,7 +138,7 @@ func (h *HTTPHandler) createSale(w http.ResponseWriter, r *http.Request) {
 	}
 	items := make([]commands.SaleItemInput, len(body.Items))
 	for i, it := range body.Items {
-		items[i] = commands.SaleItemInput{ProductID: it.ProductID, Quantity: it.Quantity, UnitPrice: it.UnitPrice, Discount: it.Discount}
+		items[i] = commands.SaleItemInput{ProductID: it.ProductID, Quantity: it.Quantity, Discount: it.Discount}
 	}
 	res, err := h.create.Handle(r.Context(), commands.CreateSaleCommand{
 		TenantID:       claims.TenantID,

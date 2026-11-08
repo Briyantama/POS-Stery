@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	invcommands "github.com/Briyantama/POS-Stery/services/inventory/application/commands"
+	prodpg "github.com/Briyantama/POS-Stery/services/product/infrastructure/postgres"
 	"github.com/Briyantama/POS-Stery/services/sales/application/commands"
 	"github.com/Briyantama/POS-Stery/services/sales/infrastructure"
 	"github.com/Briyantama/POS-Stery/services/sales/infrastructure/postgres"
@@ -28,6 +29,7 @@ func Build(d Deps) (*HTTPHandler, error) {
 	create := commands.NewCreateSaleHandler(
 		repo,
 		infrastructure.NewInventoryPort(d.Stock),
+		infrastructure.NewPricePort(prodpg.NewProductRepository(d.Pool)),
 		infrastructure.NewEventPublisher(d.Events),
 	)
 	return NewHTTPHandler(create, repo, d.Verifier, d.RequireStore), nil

@@ -27,7 +27,6 @@ type CreateSaleCommand struct {
 type SaleItemInput struct {
 	ProductID string
 	Quantity  int
-	UnitPrice float64
 	Discount  float64
 }
 
@@ -42,6 +41,7 @@ type CreateSaleResult struct {
 type CreateSaleHandler struct {
 	saleRepo  domain.SaleRepository
 	inventory application.InventoryUpdater
+	prices    application.PriceReader
 	publisher application.EventPublisher
 }
 
@@ -49,11 +49,13 @@ type CreateSaleHandler struct {
 func NewCreateSaleHandler(
 	saleRepo domain.SaleRepository,
 	inventory application.InventoryUpdater,
+	prices application.PriceReader,
 	publisher application.EventPublisher,
 ) *CreateSaleHandler {
 	return &CreateSaleHandler{
 		saleRepo:  saleRepo,
 		inventory: inventory,
+		prices:    prices,
 		publisher: publisher,
 	}
 }
@@ -104,7 +106,15 @@ func (h *CreateSaleHandler) Handle(ctx context.Context, cmd CreateSaleCommand) (
 		if err != nil {
 			return nil, fmt.Errorf("%w: invalid product_id %q", domain.ErrInvalidArgument, input.ProductID)
 		}
-		lineTotal := float64(input.Quantity)*input.UnitPrice - input.Discount
+		unitPrice, err := h.prices.UnitPrice(ctx, tenantID, productID)
+		if err != nil {
+			return nil, err
+		}
+		gross := float64(input.Quantity) * unitPrice
+		if input.Discount > gross {
+			return nil, fmt.Errorf("%w: item discount exceeds line total for product %s", domain.ErrInvalidArgument, productID)
+		}
+		lineTotal := gross - input.Discount
 		subtotal += lineTotal
 
 		items = append(items, domain.SaleItem{
@@ -112,16 +122,16 @@ func (h *CreateSaleHandler) Handle(ctx context.Context, cmd CreateSaleCommand) (
 			TenantID:  tenantID,
 			ProductID: productID,
 			Quantity:  input.Quantity,
-			UnitPrice: input.UnitPrice,
+			UnitPrice: unitPrice,
 			Discount:  input.Discount,
 			LineTotal: lineTotal,
 		})
 	}
 
-	total := subtotal - cmd.DiscountAmount
-	if total < 0 {
-		total = 0
+	if cmd.DiscountAmount > subtotal {
+		return nil, fmt.Errorf("%w: discount_amount exceeds subtotal", domain.ErrInvalidArgument)
 	}
+	total := subtotal - cmd.DiscountAmount
 
 	saleID := uuid.New()
 
@@ -222,8 +232,8 @@ func validateCreateSaleCommand(cmd CreateSaleCommand) error {
 		if item.Quantity <= 0 {
 			return fmt.Errorf("%w: item[%d] quantity must be positive", domain.ErrInvalidArgument, i)
 		}
-		if item.UnitPrice < 0 {
-			return fmt.Errorf("%w: item[%d] unit_price must be non-negative", domain.ErrInvalidArgument, i)
+		if item.Discount < 0 {
+			return fmt.Errorf("%w: item[%d] discount must be non-negative", domain.ErrInvalidArgument, i)
 		}
 	}
 	if cmd.DiscountAmount < 0 {
