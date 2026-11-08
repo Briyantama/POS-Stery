@@ -47,6 +47,9 @@ coverage/
 *.coverprofile
 .nyc_output/
 
+# Local API binary, pid and log
+.run/
+
 # Logs
 *.log
 logs/

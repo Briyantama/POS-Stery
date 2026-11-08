@@ -3,6 +3,7 @@ package testdb
 
 import (
 	"database/sql"
+	"net/url"
 	"testing"
 
 	kit "github.com/Briyantama/stery-kit/go/testdb"
@@ -22,4 +23,18 @@ func NewMigrated(t *testing.T) *sql.DB { t.Helper(); return kit.NewMigrated(t, p
 func NewMigratedURL(t *testing.T) string {
 	t.Helper()
 	return kit.NewMigratedURL(t, prefix, db.Migrations)
+}
+
+// AsApp returns dbURL with every session switched to pos_app, which is subject to RLS. The admin
+// URL from TEST_DATABASE_URL is a superuser or BYPASSRLS, so tenant isolation only shows through this one.
+func AsApp(t *testing.T, dbURL string) string {
+	t.Helper()
+	u, err := url.Parse(dbURL)
+	if err != nil {
+		t.Fatalf("parse database url: %v", err)
+	}
+	q := u.Query()
+	q.Set("role", "pos_app")
+	u.RawQuery = q.Encode()
+	return u.String()
 }

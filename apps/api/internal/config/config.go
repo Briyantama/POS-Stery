@@ -28,9 +28,7 @@ type Config struct {
 	JWTPrivateKeyPath string
 	JWTPublicKeyPath  string
 
-	// ServiceEnv and LogLevel carry over from the old shared config (ENVIRONMENT, LOG_LEVEL).
-	ServiceEnv string
-	LogLevel   string
+	LogLevel string
 
 	TrustedProxies []netip.Prefix
 }
@@ -61,7 +59,6 @@ func Load(getenv func(string) string) (Config, error) {
 		RedisPassword:     getenv("REDIS_PASSWORD"),
 		JWTPrivateKeyPath: required("JWT_RS256_PRIVATE_KEY_PATH"),
 		JWTPublicKeyPath:  required("JWT_RS256_PUBLIC_KEY_PATH"),
-		ServiceEnv:        fallback("SERVICE_ENV", "development"),
 		LogLevel:          fallback("LOG_LEVEL", "info"),
 	}
 
@@ -118,7 +115,7 @@ func parseProxies(raw string) ([]netip.Prefix, bool) {
 // String summarizes the configuration with every secret redacted.
 func (c Config) String() string {
 	return fmt.Sprintf(
-		"Config{http=:%s env=%s logLevel=%s redis=%s redisTLS=%t jwtKeys=%s,%s trustedProxies=%d database=[redacted] redisPassword=[redacted]}",
-		c.HTTPPort, c.ServiceEnv, c.LogLevel, c.RedisAddr, c.RedisTLS, c.JWTPrivateKeyPath, c.JWTPublicKeyPath, len(c.TrustedProxies),
+		"Config{http=:%s logLevel=%s redis=%s redisTLS=%t jwtKeys=%s,%s trustedProxies=%d database=[redacted] redisPassword=[redacted]}",
+		c.HTTPPort, c.LogLevel, c.RedisAddr, c.RedisTLS, c.JWTPrivateKeyPath, c.JWTPublicKeyPath, len(c.TrustedProxies),
 	)
 }

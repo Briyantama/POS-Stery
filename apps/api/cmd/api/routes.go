@@ -16,6 +16,7 @@ import (
 
 	"github.com/Briyantama/POS-Stery/internal/config"
 	"github.com/Briyantama/POS-Stery/services/auth"
+	"github.com/Briyantama/POS-Stery/services/auth/infrastructure/redisstore"
 	"github.com/Briyantama/POS-Stery/services/customer"
 	"github.com/Briyantama/POS-Stery/services/inventory"
 	"github.com/Briyantama/POS-Stery/services/product"
@@ -38,7 +39,7 @@ func build(cfg config.Config, pool *pgxpool.Pool, rdb *redis.Client) ([]registra
 	if err != nil {
 		return nil, fmt.Errorf("parse jwt public key: %w", err)
 	}
-	verifier := authn.NewRSAVerifier(pub, authn.RedisRevocation(rdb, "pos:token:blacklist:"))
+	verifier := authn.NewRSAVerifier(pub, authn.RedisRevocation(rdb, redisstore.BlacklistPrefix))
 	publisher := events.NewPublisher(rdb, eventStream)
 
 	authDeps := auth.Deps{
