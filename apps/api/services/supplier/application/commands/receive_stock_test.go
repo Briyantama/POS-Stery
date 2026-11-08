@@ -13,38 +13,30 @@ import (
 // ── stubs ──────────────────────────────────────────────────────────────────────
 
 type stubPORepo struct {
-	order        *domain.PurchaseOrder
-	getErr       error
-	updateErr    error
-	updatedOrder *domain.PurchaseOrder
+	order      *domain.PurchaseOrder
+	applied    []domain.ReceivedLine
+	receiveErr error
+	gotLines   []domain.ReceivedLine
+	calls      int
 }
 
 func (r *stubPORepo) Create(_ context.Context, _ *domain.PurchaseOrder) error { return nil }
 
 func (r *stubPORepo) Get(_ context.Context, _, _, _ uuid.UUID) (*domain.PurchaseOrder, error) {
-	return r.order, r.getErr
+	return r.order, nil
 }
 
 func (r *stubPORepo) List(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]*domain.PurchaseOrder, int, error) {
 	return nil, 0, nil
 }
 
-func (r *stubPORepo) UpdateReceived(_ context.Context, order *domain.PurchaseOrder) error {
-	if r.updateErr != nil {
-		return r.updateErr
+func (r *stubPORepo) ReceiveOrder(_ context.Context, _, _, _ uuid.UUID, lines []domain.ReceivedLine) (*domain.PurchaseOrder, []domain.ReceivedLine, error) {
+	r.calls++
+	r.gotLines = lines
+	if r.receiveErr != nil {
+		return nil, nil, r.receiveErr
 	}
-	r.updatedOrder = order
-	return nil
-}
-
-type stubInventoryPort struct {
-	updateErr   error
-	updateCalls int
-}
-
-func (p *stubInventoryPort) UpdateStock(_ context.Context, _, _, _ string, _ int64, _, _ string) error {
-	p.updateCalls++
-	return p.updateErr
+	return r.order, r.applied, nil
 }
 
 type stubSupplierPublisher struct {
@@ -58,213 +50,125 @@ func (p *stubSupplierPublisher) PublishReplenished(_ context.Context, _, _, _, _
 
 // ── helpers ────────────────────────────────────────────────────────────────────
 
-func pendingOrder(tenantID, storeID, productID uuid.UUID, qty int32) *domain.PurchaseOrder {
-	return &domain.PurchaseOrder{
-		ID:         uuid.New(),
-		TenantID:   tenantID,
-		StoreID:    storeID,
-		SupplierID: uuid.New(),
-		Status:     domain.StatusPending,
-		Items: []*domain.PurchaseOrderItem{
-			{
-				ID:              uuid.New(),
-				TenantID:        tenantID,
-				PurchaseOrderID: uuid.New(),
-				ProductID:       productID,
-				QuantityOrdered: qty,
-			},
-		},
+func receiveCmd(items ...commands.ReceivedLineItem) commands.ReceiveStockCommand {
+	return commands.ReceiveStockCommand{
+		TenantID:        uuid.New(),
+		StoreID:         uuid.New(),
+		PurchaseOrderID: uuid.New(),
+		ItemsReceived:   items,
 	}
 }
 
-func newReceiveHandler(repo *stubPORepo, inv *stubInventoryPort, pub *stubSupplierPublisher) *commands.ReceiveStockHandler {
-	return commands.NewReceiveStockHandler(repo, inv, pub)
+func line(productID uuid.UUID, qty int32) commands.ReceivedLineItem {
+	return commands.ReceivedLineItem{ProductID: productID, QuantityReceived: qty}
 }
 
 // ── tests ──────────────────────────────────────────────────────────────────────
 
-func TestReceiveStock_MissingTenantID(t *testing.T) {
-	cmd := commands.ReceiveStockCommand{
-		TenantID:        uuid.Nil,
-		StoreID:         uuid.New(),
-		PurchaseOrderID: uuid.New(),
-		ItemsReceived:   []commands.ReceivedLineItem{{ProductID: uuid.New(), QuantityReceived: 5}},
+func TestReceiveStock_InvalidArguments(t *testing.T) {
+	tests := map[string]func(*commands.ReceiveStockCommand){
+		"missing tenant": func(c *commands.ReceiveStockCommand) { c.TenantID = uuid.Nil },
+		"missing store":  func(c *commands.ReceiveStockCommand) { c.StoreID = uuid.Nil },
+		"missing order":  func(c *commands.ReceiveStockCommand) { c.PurchaseOrderID = uuid.Nil },
+		"no items":       func(c *commands.ReceiveStockCommand) { c.ItemsReceived = nil },
+		"nil product": func(c *commands.ReceiveStockCommand) {
+			c.ItemsReceived = []commands.ReceivedLineItem{line(uuid.Nil, 5)}
+		},
+		"zero quantity": func(c *commands.ReceiveStockCommand) {
+			c.ItemsReceived = []commands.ReceivedLineItem{line(uuid.New(), 0)}
+		},
+		"negative quantity": func(c *commands.ReceiveStockCommand) {
+			c.ItemsReceived = []commands.ReceivedLineItem{line(uuid.New(), -1)}
+		},
 	}
-	_, err := newReceiveHandler(&stubPORepo{}, &stubInventoryPort{}, &stubSupplierPublisher{}).Handle(context.Background(), cmd)
-	if !errors.Is(err, domain.ErrInvalidArgument) {
-		t.Fatalf("want ErrInvalidArgument, got %v", err)
-	}
-}
-
-func TestReceiveStock_MissingStoreID(t *testing.T) {
-	cmd := commands.ReceiveStockCommand{
-		TenantID:        uuid.New(),
-		StoreID:         uuid.Nil,
-		PurchaseOrderID: uuid.New(),
-		ItemsReceived:   []commands.ReceivedLineItem{{ProductID: uuid.New(), QuantityReceived: 5}},
-	}
-	_, err := newReceiveHandler(&stubPORepo{}, &stubInventoryPort{}, &stubSupplierPublisher{}).Handle(context.Background(), cmd)
-	if !errors.Is(err, domain.ErrInvalidArgument) {
-		t.Fatalf("want ErrInvalidArgument, got %v", err)
-	}
-}
-
-func TestReceiveStock_MissingPurchaseOrderID(t *testing.T) {
-	cmd := commands.ReceiveStockCommand{
-		TenantID:        uuid.New(),
-		StoreID:         uuid.New(),
-		PurchaseOrderID: uuid.Nil,
-		ItemsReceived:   []commands.ReceivedLineItem{{ProductID: uuid.New(), QuantityReceived: 5}},
-	}
-	_, err := newReceiveHandler(&stubPORepo{}, &stubInventoryPort{}, &stubSupplierPublisher{}).Handle(context.Background(), cmd)
-	if !errors.Is(err, domain.ErrInvalidArgument) {
-		t.Fatalf("want ErrInvalidArgument, got %v", err)
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			cmd := receiveCmd(line(uuid.New(), 5))
+			mutate(&cmd)
+			repo := &stubPORepo{}
+			_, err := commands.NewReceiveStockHandler(repo, &stubSupplierPublisher{}).Handle(context.Background(), cmd)
+			if !errors.Is(err, domain.ErrInvalidArgument) {
+				t.Fatalf("want ErrInvalidArgument, got %v", err)
+			}
+			if repo.calls != 0 {
+				t.Fatal("repository must not be called for invalid input")
+			}
+		})
 	}
 }
 
-func TestReceiveStock_EmptyItems(t *testing.T) {
-	cmd := commands.ReceiveStockCommand{
-		TenantID:        uuid.New(),
-		StoreID:         uuid.New(),
-		PurchaseOrderID: uuid.New(),
-		ItemsReceived:   nil,
-	}
-	_, err := newReceiveHandler(&stubPORepo{}, &stubInventoryPort{}, &stubSupplierPublisher{}).Handle(context.Background(), cmd)
-	if !errors.Is(err, domain.ErrInvalidArgument) {
-		t.Fatalf("want ErrInvalidArgument for empty items, got %v", err)
-	}
-}
+// The repository refuses a non-PENDING order (already received or cancelled). The handler must
+// surface the conflict and publish nothing.
+func TestReceiveStock_RepoConflict_NoEvents(t *testing.T) {
+	repo := &stubPORepo{receiveErr: domain.ErrConflict}
+	pub := &stubSupplierPublisher{}
 
-func TestReceiveStock_NilProductID(t *testing.T) {
-	cmd := commands.ReceiveStockCommand{
-		TenantID:        uuid.New(),
-		StoreID:         uuid.New(),
-		PurchaseOrderID: uuid.New(),
-		ItemsReceived:   []commands.ReceivedLineItem{{ProductID: uuid.Nil, QuantityReceived: 5}},
-	}
-	_, err := newReceiveHandler(&stubPORepo{}, &stubInventoryPort{}, &stubSupplierPublisher{}).Handle(context.Background(), cmd)
-	if !errors.Is(err, domain.ErrInvalidArgument) {
-		t.Fatalf("want ErrInvalidArgument for nil product_id, got %v", err)
-	}
-}
-
-func TestReceiveStock_ZeroQuantity(t *testing.T) {
-	cmd := commands.ReceiveStockCommand{
-		TenantID:        uuid.New(),
-		StoreID:         uuid.New(),
-		PurchaseOrderID: uuid.New(),
-		ItemsReceived:   []commands.ReceivedLineItem{{ProductID: uuid.New(), QuantityReceived: 0}},
-	}
-	_, err := newReceiveHandler(&stubPORepo{}, &stubInventoryPort{}, &stubSupplierPublisher{}).Handle(context.Background(), cmd)
-	if !errors.Is(err, domain.ErrInvalidArgument) {
-		t.Fatalf("want ErrInvalidArgument for zero quantity, got %v", err)
-	}
-}
-
-func TestReceiveStock_AlreadyReceivedOrder(t *testing.T) {
-	tenantID, storeID, productID := uuid.New(), uuid.New(), uuid.New()
-	order := pendingOrder(tenantID, storeID, productID, 10)
-	order.Status = domain.StatusReceived
-
-	cmd := commands.ReceiveStockCommand{
-		TenantID:        tenantID,
-		StoreID:         storeID,
-		PurchaseOrderID: order.ID,
-		ItemsReceived:   []commands.ReceivedLineItem{{ProductID: productID, QuantityReceived: 5}},
-	}
-	_, err := newReceiveHandler(&stubPORepo{order: order}, &stubInventoryPort{}, &stubSupplierPublisher{}).Handle(context.Background(), cmd)
+	_, err := commands.NewReceiveStockHandler(repo, pub).Handle(context.Background(), receiveCmd(line(uuid.New(), 5)))
 	if !errors.Is(err, domain.ErrConflict) {
-		t.Fatalf("want ErrConflict for already-received order, got %v", err)
+		t.Fatalf("want ErrConflict, got %v", err)
+	}
+	if pub.calls != 0 {
+		t.Errorf("want 0 publish calls, got %d", pub.calls)
 	}
 }
 
-func TestReceiveStock_CancelledOrder(t *testing.T) {
-	tenantID, storeID, productID := uuid.New(), uuid.New(), uuid.New()
-	order := pendingOrder(tenantID, storeID, productID, 10)
-	order.Status = domain.StatusCancelled
+// A failure inside the receipt transaction (e.g. missing stock row) propagates; no events.
+func TestReceiveStock_RepoFails_NoEvents(t *testing.T) {
+	repo := &stubPORepo{receiveErr: domain.ErrNotFound}
+	pub := &stubSupplierPublisher{}
 
-	repo := &stubPORepo{order: order}
-	cmd := commands.ReceiveStockCommand{
-		TenantID:        tenantID,
-		StoreID:         storeID,
-		PurchaseOrderID: order.ID,
-		ItemsReceived:   []commands.ReceivedLineItem{{ProductID: productID, QuantityReceived: 5}},
+	_, err := commands.NewReceiveStockHandler(repo, pub).Handle(context.Background(), receiveCmd(line(uuid.New(), 5)))
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("want ErrNotFound, got %v", err)
 	}
-	_, err := newReceiveHandler(repo, &stubInventoryPort{}, &stubSupplierPublisher{}).Handle(context.Background(), cmd)
-	if !errors.Is(err, domain.ErrConflict) {
-		t.Fatalf("want ErrConflict for cancelled order, got %v", err)
-	}
-}
-
-func TestReceiveStock_InventoryUpdateFails(t *testing.T) {
-	tenantID, storeID, productID := uuid.New(), uuid.New(), uuid.New()
-	order := pendingOrder(tenantID, storeID, productID, 10)
-
-	repo := &stubPORepo{order: order}
-	inv := &stubInventoryPort{updateErr: errors.New("inventory unavailable")}
-	cmd := commands.ReceiveStockCommand{
-		TenantID:        tenantID,
-		StoreID:         storeID,
-		PurchaseOrderID: order.ID,
-		ItemsReceived:   []commands.ReceivedLineItem{{ProductID: productID, QuantityReceived: 5}},
-	}
-	_, err := newReceiveHandler(repo, inv, &stubSupplierPublisher{}).Handle(context.Background(), cmd)
-	if err == nil {
-		t.Fatal("want error when inventory update fails")
+	if pub.calls != 0 {
+		t.Errorf("want 0 publish calls, got %d", pub.calls)
 	}
 }
 
 func TestReceiveStock_HappyPath(t *testing.T) {
-	tenantID, storeID, productID := uuid.New(), uuid.New(), uuid.New()
-	order := pendingOrder(tenantID, storeID, productID, 10)
-
-	repo := &stubPORepo{order: order}
-	inv := &stubInventoryPort{}
+	productID := uuid.New()
+	order := &domain.PurchaseOrder{ID: uuid.New(), Status: domain.StatusReceived}
+	repo := &stubPORepo{order: order, applied: []domain.ReceivedLine{{ProductID: productID, Quantity: 5}}}
 	pub := &stubSupplierPublisher{}
-	cmd := commands.ReceiveStockCommand{
-		TenantID:        tenantID,
-		StoreID:         storeID,
-		PurchaseOrderID: order.ID,
-		ItemsReceived:   []commands.ReceivedLineItem{{ProductID: productID, QuantityReceived: 5}},
-	}
 
-	result, err := newReceiveHandler(repo, inv, pub).Handle(context.Background(), cmd)
+	result, err := commands.NewReceiveStockHandler(repo, pub).Handle(context.Background(), receiveCmd(line(productID, 5)))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.Status != domain.StatusReceived {
-		t.Errorf("want status=RECEIVED, got %s", result.Status)
+	if result != order {
+		t.Error("want the order returned by the repository")
 	}
-	if inv.updateCalls != 1 {
-		t.Errorf("want 1 inventory update call, got %d", inv.updateCalls)
+	if repo.calls != 1 {
+		t.Errorf("want 1 repository receipt, got %d", repo.calls)
 	}
 	if pub.calls != 1 {
 		t.Errorf("want 1 publish call, got %d", pub.calls)
 	}
-	if repo.updatedOrder == nil {
-		t.Error("order must be persisted after receipt")
+}
+
+// Lines the repository skipped (product not on the order) must not produce events.
+func TestReceiveStock_ProductNotInOrder_NoEvent(t *testing.T) {
+	repo := &stubPORepo{order: &domain.PurchaseOrder{ID: uuid.New()}, applied: nil}
+	pub := &stubSupplierPublisher{}
+
+	if _, err := commands.NewReceiveStockHandler(repo, pub).Handle(context.Background(), receiveCmd(line(uuid.New(), 3))); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pub.calls != 0 {
+		t.Errorf("want 0 publish calls for unmatched product, got %d", pub.calls)
 	}
 }
 
-func TestReceiveStock_ProductNotInOrder_Skipped(t *testing.T) {
-	tenantID, storeID, productID := uuid.New(), uuid.New(), uuid.New()
-	order := pendingOrder(tenantID, storeID, productID, 10)
+// Repeated lines for one product are merged so stock and quantity_received are booked once.
+func TestReceiveStock_DuplicateProductLinesMerged(t *testing.T) {
+	productID := uuid.New()
+	repo := &stubPORepo{order: &domain.PurchaseOrder{ID: uuid.New()}}
 
-	repo := &stubPORepo{order: order}
-	inv := &stubInventoryPort{}
-	unknownProduct := uuid.New()
-	cmd := commands.ReceiveStockCommand{
-		TenantID:        tenantID,
-		StoreID:         storeID,
-		PurchaseOrderID: order.ID,
-		ItemsReceived:   []commands.ReceivedLineItem{{ProductID: unknownProduct, QuantityReceived: 3}},
-	}
-
-	_, err := newReceiveHandler(repo, inv, &stubSupplierPublisher{}).Handle(context.Background(), cmd)
-	if err != nil {
+	if _, err := commands.NewReceiveStockHandler(repo, &stubSupplierPublisher{}).Handle(context.Background(), receiveCmd(line(productID, 2), line(productID, 3))); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if inv.updateCalls != 0 {
-		t.Errorf("want 0 inventory calls for unmatched product, got %d", inv.updateCalls)
+	if len(repo.gotLines) != 1 || repo.gotLines[0].Quantity != 5 {
+		t.Fatalf("want one merged line of 5, got %+v", repo.gotLines)
 	}
 }

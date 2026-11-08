@@ -40,6 +40,12 @@ type PurchaseOrderItem struct {
 	UnitCost         float64
 }
 
+// ReceivedLine is the quantity physically received for one product.
+type ReceivedLine struct {
+	ProductID uuid.UUID
+	Quantity  int32
+}
+
 // PurchaseOrder is a formal request to a supplier to deliver products.
 type PurchaseOrder struct {
 	ID         uuid.UUID

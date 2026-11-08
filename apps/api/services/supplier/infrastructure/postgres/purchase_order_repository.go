@@ -168,28 +168,76 @@ func (r *PurchaseOrderRepository) List(
 	return orders, total, err
 }
 
-// UpdateReceived persists updated received quantities and the new order status.
-func (r *PurchaseOrderRepository) UpdateReceived(ctx context.Context, order *domain.PurchaseOrder) error {
-	return pgtenant.WithTenantTx(ctx, r.pool, order.TenantID.String(), order.StoreID.String(), func(tx pgx.Tx) error {
-		// Update order status.
+// ReceiveOrder books a goods receipt in one transaction. The order row is locked FOR UPDATE and
+// must be PENDING, so concurrent or repeated receipts of the same order cannot both apply.
+// Stock is written to inventory.stock_items in the same transaction (same tenant/store RLS
+// context) so the receipt and the stock increment commit or roll back together.
+func (r *PurchaseOrderRepository) ReceiveOrder(
+	ctx context.Context,
+	tenantID, storeID, orderID uuid.UUID,
+	lines []domain.ReceivedLine,
+) (*domain.PurchaseOrder, []domain.ReceivedLine, error) {
+	var applied []domain.ReceivedLine
+
+	err := pgtenant.WithTenantTx(ctx, r.pool, tenantID.String(), storeID.String(), func(tx pgx.Tx) error {
+		var status string
+		if err := tx.QueryRow(ctx, `
+			SELECT status FROM supplier.purchase_orders
+			WHERE tenant_id = $1 AND store_id = $2 AND id = $3
+			FOR UPDATE
+		`, tenantID, storeID, orderID).Scan(&status); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return fmt.Errorf("purchase order: %w", domain.ErrNotFound)
+			}
+			return fmt.Errorf("lock purchase order: %w", err)
+		}
+		if domain.PurchaseOrderStatus(status) != domain.StatusPending {
+			return fmt.Errorf("order is %s, only PENDING orders can be received: %w", status, domain.ErrConflict)
+		}
+
+		for _, line := range lines {
+			tag, err := tx.Exec(ctx, `
+				UPDATE supplier.purchase_order_items
+				SET quantity_received = quantity_received + $1
+				WHERE tenant_id = $2 AND purchase_order_id = $3 AND product_id = $4
+			`, line.Quantity, tenantID, orderID, line.ProductID)
+			if err != nil {
+				return fmt.Errorf("update received quantity for product %s: %w", line.ProductID, err)
+			}
+			if tag.RowsAffected() == 0 {
+				continue // product is not on this order
+			}
+
+			tag, err = tx.Exec(ctx, `
+				UPDATE inventory.stock_items
+				SET quantity = quantity + $1, updated_at = NOW()
+				WHERE tenant_id = $2 AND store_id = $3 AND product_id = $4
+			`, int64(line.Quantity), tenantID, storeID, line.ProductID)
+			if err != nil {
+				return fmt.Errorf("increase stock for product %s: %w", line.ProductID, err)
+			}
+			if tag.RowsAffected() == 0 {
+				return fmt.Errorf("inventory item for product %s: %w", line.ProductID, domain.ErrNotFound)
+			}
+			applied = append(applied, line)
+		}
+
 		if _, err := tx.Exec(ctx, `
 			UPDATE supplier.purchase_orders
 			SET status = $1, updated_at = NOW()
 			WHERE tenant_id = $2 AND id = $3
-		`, string(order.Status), order.TenantID, order.ID); err != nil {
+		`, string(domain.StatusReceived), tenantID, orderID); err != nil {
 			return fmt.Errorf("update order status: %w", err)
-		}
-
-		// Update received quantities for each line item.
-		for _, item := range order.Items {
-			if _, err := tx.Exec(ctx, `
-				UPDATE supplier.purchase_order_items
-				SET quantity_received = $1
-				WHERE tenant_id = $2 AND purchase_order_id = $3 AND product_id = $4
-			`, item.QuantityReceived, order.TenantID, order.ID, item.ProductID); err != nil {
-				return fmt.Errorf("update received quantity for product %s: %w", item.ProductID, err)
-			}
 		}
 		return nil
 	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	order, err := r.Get(ctx, tenantID, storeID, orderID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return order, applied, nil
 }

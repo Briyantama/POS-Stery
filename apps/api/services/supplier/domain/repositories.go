@@ -31,6 +31,10 @@ type PurchaseOrderRepository interface {
 	// List returns a paginated list of purchase orders filtered by optional status.
 	List(ctx context.Context, tenantID, storeID uuid.UUID, status string, limit, offset int) ([]*PurchaseOrder, int, error)
 
-	// UpdateStatus changes the order status and updates received quantities for items.
-	UpdateReceived(ctx context.Context, order *PurchaseOrder) error
+	// ReceiveOrder books a goods receipt atomically: in one transaction it locks the order,
+	// requires status PENDING (ErrConflict otherwise, so a receipt can never be applied twice),
+	// adds each line's quantity to the order item's quantity_received and to the store's stock
+	// (relative increments), and marks the order RECEIVED. Lines whose product is not on the
+	// order are skipped. Returns the updated order and the lines that were applied.
+	ReceiveOrder(ctx context.Context, tenantID, storeID, orderID uuid.UUID, lines []ReceivedLine) (*PurchaseOrder, []ReceivedLine, error)
 }

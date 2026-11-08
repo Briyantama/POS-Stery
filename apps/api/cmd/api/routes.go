@@ -58,7 +58,7 @@ func build(cfg config.Config, pool *pgxpool.Pool, rdb *redis.Client) ([]registra
 			return sales.Build(sales.Deps{Pool: pool, Events: publisher, Verifier: verifier, RequireStore: requireStore, Stock: stock})
 		},
 		func() (registrar, error) {
-			return supplier.Build(supplier.Deps{Pool: pool, Events: publisher, Verifier: verifier, RequireStore: requireStore, Stock: stock})
+			return supplier.Build(supplier.Deps{Pool: pool, Events: publisher, Verifier: verifier, RequireStore: requireStore})
 		},
 		func() (registrar, error) {
 			return customer.Build(customer.Deps{Pool: pool, Events: publisher, Verifier: verifier, RequireStore: requireStore})

@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/Briyantama/POS-Stery/services/supplier/application"
 	"github.com/Briyantama/POS-Stery/services/supplier/domain"
@@ -26,28 +27,22 @@ type ReceiveStockCommand struct {
 // ReceiveStockHandler processes ReceiveStockCommand.
 type ReceiveStockHandler struct {
 	orderRepo domain.PurchaseOrderRepository
-	inventory application.InventoryPort
 	publisher application.EventPublisher
 }
 
 // NewReceiveStockHandler creates a ReceiveStockHandler.
 func NewReceiveStockHandler(
 	orderRepo domain.PurchaseOrderRepository,
-	inventory application.InventoryPort,
 	publisher application.EventPublisher,
 ) *ReceiveStockHandler {
-	return &ReceiveStockHandler{
-		orderRepo: orderRepo,
-		inventory: inventory,
-		publisher: publisher,
-	}
+	return &ReceiveStockHandler{orderRepo: orderRepo, publisher: publisher}
 }
 
 // Handle executes the ReceiveStock use case.
 //
-// For each received line item, the inventory-service is called in-process to add
-// the received quantity with reason RECEIPT. An Inventory.Replenished event is
-// published to the event stream for each item. The purchase order status is set to RECEIVED.
+// The repository books the whole receipt (order items, store stock, order status RECEIVED) in one
+// transaction and refuses an order that is not PENDING, so a receipt cannot be applied twice.
+// An Inventory.Replenished event is published after commit for each applied line.
 func (h *ReceiveStockHandler) Handle(ctx context.Context, cmd ReceiveStockCommand) (*domain.PurchaseOrder, error) {
 	if cmd.TenantID == uuid.Nil {
 		return nil, fmt.Errorf("tenantID required: %w", domain.ErrInvalidArgument)
@@ -62,7 +57,9 @@ func (h *ReceiveStockHandler) Handle(ctx context.Context, cmd ReceiveStockComman
 		return nil, fmt.Errorf("at least one received item required: %w", domain.ErrInvalidArgument)
 	}
 
-	// Validate all line items before any IO.
+	// Validate all line items before any IO; merge repeated products so each is booked once.
+	lines := make([]domain.ReceivedLine, 0, len(cmd.ItemsReceived))
+	index := make(map[uuid.UUID]int, len(cmd.ItemsReceived))
 	for _, line := range cmd.ItemsReceived {
 		if line.ProductID == uuid.Nil {
 			return nil, fmt.Errorf("received item product_id required: %w", domain.ErrInvalidArgument)
@@ -70,67 +67,31 @@ func (h *ReceiveStockHandler) Handle(ctx context.Context, cmd ReceiveStockComman
 		if line.QuantityReceived <= 0 {
 			return nil, fmt.Errorf("received quantity must be > 0: %w", domain.ErrInvalidArgument)
 		}
-	}
-
-	// Load the purchase order to validate ownership and current state.
-	order, err := h.orderRepo.Get(ctx, cmd.TenantID, cmd.StoreID, cmd.PurchaseOrderID)
-	if err != nil {
-		return nil, fmt.Errorf("get purchase order: %w", err)
-	}
-
-	if order.Status == domain.StatusCancelled {
-		return nil, fmt.Errorf("cannot receive against a cancelled order: %w", domain.ErrConflict)
-	}
-	if order.Status == domain.StatusReceived {
-		return nil, fmt.Errorf("order already received: %w", domain.ErrConflict)
-	}
-
-	// Build a map of received quantities keyed by product ID for easy lookup.
-	receivedMap := make(map[uuid.UUID]int32, len(cmd.ItemsReceived))
-	for _, line := range cmd.ItemsReceived {
-		receivedMap[line.ProductID] = line.QuantityReceived
-	}
-
-	// For each matched line item: update inventory in-process, then emit an event.
-	for _, item := range order.Items {
-		qty, ok := receivedMap[item.ProductID]
-		if !ok || qty == 0 {
+		if i, ok := index[line.ProductID]; ok {
+			lines[i].Quantity += line.QuantityReceived
 			continue
 		}
-
-		item.QuantityReceived += qty
-
-		// Notify inventory-service of the stock addition.
-		if err := h.inventory.UpdateStock(
-			ctx,
-			cmd.TenantID.String(),
-			cmd.StoreID.String(),
-			item.ProductID.String(),
-			int64(qty),
-			"RECEIPT",
-			order.ID.String(),
-		); err != nil {
-			return nil, fmt.Errorf("update inventory for product %s: %w", item.ProductID, err)
-		}
-
-		// Publish Inventory.Replenished event; publishing failure is non-fatal.
-		if pubErr := h.publisher.PublishReplenished(
-			ctx,
-			cmd.TenantID.String(),
-			cmd.StoreID.String(),
-			order.ID.String(),
-			item.ProductID.String(),
-			int64(qty),
-		); pubErr != nil {
-			_ = pubErr // log-worthy but must not abort the operation
-		}
+		index[line.ProductID] = len(lines)
+		lines = append(lines, domain.ReceivedLine{ProductID: line.ProductID, Quantity: line.QuantityReceived})
 	}
 
-	// Mark order as RECEIVED.
-	order.Status = domain.StatusReceived
+	order, applied, err := h.orderRepo.ReceiveOrder(ctx, cmd.TenantID, cmd.StoreID, cmd.PurchaseOrderID, lines)
+	if err != nil {
+		return nil, fmt.Errorf("receive purchase order: %w", err)
+	}
 
-	if err := h.orderRepo.UpdateReceived(ctx, order); err != nil {
-		return nil, fmt.Errorf("persist received order: %w", err)
+	for _, line := range applied {
+		// Publishing failure is non-fatal: the receipt is already committed.
+		if err := h.publisher.PublishReplenished(
+			ctx,
+			cmd.TenantID.String(),
+			cmd.StoreID.String(),
+			order.ID.String(),
+			line.ProductID.String(),
+			int64(line.Quantity),
+		); err != nil {
+			slog.ErrorContext(ctx, "publish replenished event", "purchase_order_id", order.ID, "error", err)
+		}
 	}
 
 	return order, nil
