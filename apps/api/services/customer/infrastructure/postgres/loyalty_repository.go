@@ -22,20 +22,25 @@ func NewLoyaltyRepository(pool *pgxpool.Pool) *LoyaltyRepository {
 }
 
 // AddPoints inserts a loyalty_points row and returns the new running total.
+// It returns domain.ErrAlreadyAwarded when the sale already awarded points.
 func (r *LoyaltyRepository) AddPoints(ctx context.Context, tenantID uuid.UUID, entry *domain.LoyaltyEntry) (int, error) {
 	var newTotal int
 
 	err := pgtenant.WithTenantTx(ctx, r.pool, tenantID.String(), "", func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `
+		tag, err := tx.Exec(ctx, `
 			INSERT INTO customer.loyalty_points
 				(id, tenant_id, customer_id, points, total_points, sale_id)
 			VALUES ($1,$2,$3,$4,$5,$6)
+			ON CONFLICT (tenant_id, sale_id) DO NOTHING
 		`,
 			entry.ID, entry.TenantID, entry.CustomerID,
 			entry.Points, entry.TotalPoints, entry.SaleID,
 		)
 		if err != nil {
 			return fmt.Errorf("insert loyalty entry: %w", err)
+		}
+		if tag.RowsAffected() == 0 {
+			return domain.ErrAlreadyAwarded
 		}
 		newTotal = entry.TotalPoints
 		return nil

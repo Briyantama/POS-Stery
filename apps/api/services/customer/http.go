@@ -53,19 +53,20 @@ func NewHTTPHandler(c createHandler, l loyaltyHandler, customers customerReader,
 	return &HTTPHandler{create: c, loyalty: l, customers: customers, points: points, verifier: v, requireStore: requireStore}
 }
 
-// Register mounts the routes; all are authenticated, roles admin and cashier.
+// Register mounts the routes; all are authenticated. Reads and customer creation
+// allow admin and cashier; awarding points is admin-only (a cashier must not mint points).
 func (h *HTTPHandler) Register(mux *http.ServeMux) {
-	guard := func(f http.HandlerFunc) http.Handler {
-		var next http.Handler = authn.WithRole("admin", "cashier")(f)
+	guard := func(f http.HandlerFunc, roles ...string) http.Handler {
+		var next http.Handler = authn.WithRole(roles...)(f)
 		if h.requireStore != nil {
 			next = h.requireStore(next)
 		}
 		return authn.Authenticate(h.verifier)(next)
 	}
-	mux.Handle("GET /api/v1/customers", guard(h.list))
-	mux.Handle("POST /api/v1/customers", guard(h.createCustomer))
-	mux.Handle("GET /api/v1/customers/{customer_id}", guard(h.get))
-	mux.Handle("POST /api/v1/customers/{customer_id}/loyalty", guard(h.addLoyalty))
+	mux.Handle("GET /api/v1/customers", guard(h.list, "admin", "cashier"))
+	mux.Handle("POST /api/v1/customers", guard(h.createCustomer, "admin", "cashier"))
+	mux.Handle("GET /api/v1/customers/{customer_id}", guard(h.get, "admin", "cashier"))
+	mux.Handle("POST /api/v1/customers/{customer_id}/loyalty", guard(h.addLoyalty, "admin"))
 }
 
 type customerJSON struct {
@@ -117,6 +118,8 @@ func writeErr(w http.ResponseWriter, r *http.Request, err error) {
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "invalid request")
 	case errors.Is(err, domain.ErrNotFound):
 		httpx.WriteError(w, http.StatusNotFound, "customer not found")
+	case errors.Is(err, domain.ErrAlreadyAwarded):
+		httpx.WriteError(w, http.StatusConflict, "points already awarded for this sale")
 	default:
 		slog.ErrorContext(r.Context(), "customer request failed", "path", r.URL.Path, "error", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal error")

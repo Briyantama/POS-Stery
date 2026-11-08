@@ -26,6 +26,8 @@ func (stubVerifier) Verify(_ context.Context, tok string) (authn.Claims, error) 
 		return authn.Claims{UserID: "u1", TenantID: tenantA.String(), Roles: []string{"admin"}}, nil
 	case "viewer":
 		return authn.Claims{UserID: "u2", TenantID: tenantA.String(), Roles: []string{"viewer"}}, nil
+	case "cashier":
+		return authn.Claims{UserID: "u3", TenantID: tenantA.String(), Roles: []string{"cashier"}}, nil
 	}
 	return authn.Claims{}, errors.New("bad token")
 }
@@ -131,6 +133,7 @@ func TestStatusTable(t *testing.T) {
 		{"list 200", "GET", "/api/v1/customers?page=2&per_page=5", "", nil, 200},
 		{"get 200", "GET", "/api/v1/customers/" + id, "", nil, 200},
 		{"loyalty 200", "POST", "/api/v1/customers/" + id + "/loyalty", loy, nil, 200},
+		{"loyalty duplicate sale 409", "POST", "/api/v1/customers/" + id + "/loyalty", loy, domain.ErrAlreadyAwarded, 409},
 		{"create 201", "POST", "/api/v1/customers", `{"name":"J"}`, nil, 201},
 		{"malformed 400", "POST", "/api/v1/customers", `{`, nil, 400},
 		{"bad page 400", "GET", "/api/v1/customers?page=0", "", nil, 400},
@@ -149,5 +152,16 @@ func TestStatusTable(t *testing.T) {
 				t.Fatalf("leaked: %s", rec.Body)
 			}
 		})
+	}
+}
+
+func TestLoyaltyAdminOnly(t *testing.T) {
+	path := "/api/v1/customers/" + uuid.New().String() + "/loyalty"
+	body := `{"sale_id":"` + uuid.New().String() + `","points":1000000}`
+	if got := do(newMux(nil), "POST", path, "cashier", body).Code; got != 403 {
+		t.Fatalf("cashier minted points: %d", got)
+	}
+	if got := do(newMux(nil), "GET", "/api/v1/customers", "cashier", "").Code; got != 200 {
+		t.Fatalf("cashier read: %d", got)
 	}
 }
