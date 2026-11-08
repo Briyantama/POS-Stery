@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Briyantama/POS-Stery/internal/db"
 	"github.com/Briyantama/POS-Stery/services/customer/domain"
 	"github.com/Briyantama/stery-kit/go/pgtenant"
 	"github.com/google/uuid"
@@ -93,7 +94,8 @@ func (r *CustomerRepository) List(
 			conditions = append(conditions,
 				fmt.Sprintf("(name ILIKE $%d OR phone = $%d OR email ILIKE $%d)", argIdx, argIdx+1, argIdx+2),
 			)
-			args = append(args, "%"+query+"%", query, "%"+query+"%")
+			pattern := db.EscapeLike(query)
+			args = append(args, "%"+pattern+"%", query, "%"+pattern+"%")
 			argIdx += 3
 		}
 

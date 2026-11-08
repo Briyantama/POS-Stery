@@ -3,6 +3,9 @@ package commands
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"net/mail"
+	"strings"
 
 	"github.com/Briyantama/POS-Stery/services/customer/application"
 	"github.com/Briyantama/POS-Stery/services/customer/domain"
@@ -34,8 +37,17 @@ func (h *CreateCustomerHandler) Handle(ctx context.Context, cmd CreateCustomerCo
 	if cmd.TenantID == uuid.Nil {
 		return nil, fmt.Errorf("tenant_id is required: %w", domain.ErrInvalidArgument)
 	}
+	cmd.Name, cmd.Phone, cmd.Email = strings.TrimSpace(cmd.Name), strings.TrimSpace(cmd.Phone), strings.TrimSpace(cmd.Email)
 	if cmd.Name == "" {
 		return nil, fmt.Errorf("name is required: %w", domain.ErrInvalidArgument)
+	}
+	if len(cmd.Name) > 200 || len(cmd.Phone) > 32 || len(cmd.Email) > 254 {
+		return nil, fmt.Errorf("name, phone or email too long: %w", domain.ErrInvalidArgument)
+	}
+	if cmd.Email != "" {
+		if a, err := mail.ParseAddress(cmd.Email); err != nil || a.Address != cmd.Email {
+			return nil, fmt.Errorf("email is invalid: %w", domain.ErrInvalidArgument)
+		}
 	}
 
 	c := &domain.Customer{
@@ -52,7 +64,9 @@ func (h *CreateCustomerHandler) Handle(ctx context.Context, cmd CreateCustomerCo
 	}
 
 	// Publish Customer.New event; non-fatal on failure.
-	_ = h.publisher.PublishCustomerNew(ctx, c.ID.String(), c.TenantID.String(), c.Name)
+	if err := h.publisher.PublishCustomerNew(ctx, c.ID.String(), c.TenantID.String(), c.Name); err != nil {
+		slog.WarnContext(ctx, "publish Customer.New failed", "tenant_id", c.TenantID.String(), "customer_id", c.ID.String(), "error", err)
+	}
 
 	return c, nil
 }

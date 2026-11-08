@@ -107,3 +107,16 @@ func TestCreateCustomer_HappyPath(t *testing.T) {
 		t.Errorf("want 1 publish call, got %d", pub.calls)
 	}
 }
+
+func TestCreateCustomer_RejectsBadEmailAndLongName(t *testing.T) {
+	for name, cmd := range map[string]commands.CreateCustomerCommand{
+		"bad email":     {TenantID: uuid.New(), Name: "Jane", Email: "not-an-email"},
+		"display email": {TenantID: uuid.New(), Name: "Jane", Email: "Jane <j@x.io>"},
+		"whitespace":    {TenantID: uuid.New(), Name: "   "},
+		"name too long": {TenantID: uuid.New(), Name: string(make([]byte, 201))},
+	} {
+		if _, err := commands.NewCreateCustomerHandler(&stubCustomerRepo{}, &stubCustomerPublisher{}).Handle(context.Background(), cmd); !errors.Is(err, domain.ErrInvalidArgument) {
+			t.Errorf("%s: err = %v, want ErrInvalidArgument", name, err)
+		}
+	}
+}
