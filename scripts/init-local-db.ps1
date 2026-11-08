@@ -1,5 +1,5 @@
 # Create pos_db and bootstrap pos_admin / pos_app roles on local postgres.
-# Run once before `make dev` or `docker compose up`.
+# Run once before `make up` or `docker compose up`.
 # Usage: pwsh scripts/init-local-db.ps1
 #        (requires psql.exe in PATH — ships with PostgreSQL)
 
@@ -84,4 +84,4 @@ $sql | psql @psqlArgs -d $PgDb
 
 Write-Host "  [ok] roles and privileges ready"
 Write-Host ""
-Write-Host "Next: make migrate-up"
+Write-Host "Next: make up (runs migrations)"
