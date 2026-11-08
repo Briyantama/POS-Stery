@@ -90,8 +90,8 @@ func (r *SaleRepository) FindByID(ctx context.Context, tenantID, storeID, saleID
 			`SELECT id, tenant_id, store_id, cashier_id, customer_id,
 			        subtotal, discount_amount, total, status, notes, completed_at
 			 FROM sales.sales
-			 WHERE id = $1`,
-			saleID,
+			 WHERE id = $1 AND tenant_id = $2`,
+			saleID, tenantID,
 		)
 
 		s := &domain.Sale{}
@@ -112,8 +112,8 @@ func (r *SaleRepository) FindByID(ctx context.Context, tenantID, storeID, saleID
 		rows, err := tx.Query(ctx,
 			`SELECT id, tenant_id, sale_id, product_id, quantity, unit_price, discount, line_total
 			 FROM sales.sale_items
-			 WHERE sale_id = $1`,
-			saleID,
+			 WHERE sale_id = $1 AND tenant_id = $2`,
+			saleID, tenantID,
 		)
 		if err != nil {
 			return fmt.Errorf("query sale_items: %w", err)
@@ -138,8 +138,8 @@ func (r *SaleRepository) FindByID(ctx context.Context, tenantID, storeID, saleID
 		rRow := tx.QueryRow(ctx,
 			`SELECT id, tenant_id, store_id, sale_id, snapshot, issued_at
 			 FROM sales.receipts
-			 WHERE sale_id = $1`,
-			saleID,
+			 WHERE sale_id = $1 AND tenant_id = $2`,
+			saleID, tenantID,
 		)
 		rec := &domain.Receipt{}
 		if err := rRow.Scan(&rec.ID, &rec.TenantID, &rec.StoreID, &rec.SaleID, &rec.Snapshot, &rec.IssuedAt); err != nil {
@@ -181,7 +181,7 @@ func (r *SaleRepository) GetReport(ctx context.Context, tenantID, storeID *uuid.
 			 FROM sales.sales
 			 WHERE tenant_id = $1
 			   AND ($2::uuid IS NULL OR store_id = $2::uuid)
-			   AND date_trunc('day', completed_at) = $3::date`,
+			   AND completed_at >= $3::date AND completed_at < $3::date + 1`,
 			tenantID, storeID, date,
 		)
 
@@ -203,7 +203,7 @@ func (r *SaleRepository) GetReport(ctx context.Context, tenantID, storeID *uuid.
 			 JOIN sales.sales s ON s.id = si.sale_id
 			 WHERE s.tenant_id = $1
 			   AND ($2::uuid IS NULL OR s.store_id = $2::uuid)
-			   AND date_trunc('day', s.completed_at) = $3::date
+			   AND s.completed_at >= $3::date AND s.completed_at < $3::date + 1
 			 GROUP BY si.product_id
 			 ORDER BY SUM(si.quantity) DESC
 			 LIMIT 10`,

@@ -163,6 +163,8 @@ func (h *CreateSaleHandler) Handle(ctx context.Context, cmd CreateSaleCommand) (
 	var compensations []compensated
 
 	compensate := func() {
+		// Detached: a cancelled request must not strand the deducted stock.
+		ctx := context.WithoutCancel(ctx)
 		for _, c := range compensations {
 			if err := h.inventory.RestoreStock(ctx, cmd.TenantID, cmd.StoreID, c.productID, c.quantity, saleID.String()); err != nil {
 				slog.WarnContext(ctx, "stock restore failed during compensation",
@@ -224,6 +226,9 @@ func validateCreateSaleCommand(cmd CreateSaleCommand) error {
 	}
 	if len(cmd.Items) == 0 {
 		return fmt.Errorf("%w: at least one item is required", domain.ErrInvalidArgument)
+	}
+	if len(cmd.Notes) > 500 {
+		return fmt.Errorf("%w: notes must be at most 500 characters", domain.ErrInvalidArgument)
 	}
 	for i, item := range cmd.Items {
 		if item.ProductID == "" {
