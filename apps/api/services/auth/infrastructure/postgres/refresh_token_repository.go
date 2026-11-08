@@ -34,11 +34,15 @@ func (r *RefreshTokenRepository) Rotate(ctx context.Context, oldID uuid.UUID, ne
 		return fmt.Errorf("create new refresh token in rotation: %w", err)
 	}
 
-	if err := q.RevokeRefreshToken(ctx, db.RevokeRefreshTokenParams{
+	n, err := q.RevokeRefreshToken(ctx, db.RevokeRefreshTokenParams{
 		ID:         oldID,
 		ReplacedBy: &newRT.ID,
-	}); err != nil {
+	})
+	if err != nil {
 		return fmt.Errorf("revoke old refresh token in rotation: %w", err)
+	}
+	if n == 0 { // concurrent refresh already rotated it; the deferred rollback drops the new token
+		return fmt.Errorf("%w: refresh token already rotated", domain.ErrUnauthenticated)
 	}
 
 	return tx.Commit(ctx)
@@ -84,7 +88,7 @@ func (r *RefreshTokenRepository) FindByHash(ctx context.Context, hash string) (*
 }
 
 func (r *RefreshTokenRepository) Revoke(ctx context.Context, id uuid.UUID, replacedBy *uuid.UUID) error {
-	if err := db.New(r.pool).RevokeRefreshToken(ctx, db.RevokeRefreshTokenParams{
+	if _, err := db.New(r.pool).RevokeRefreshToken(ctx, db.RevokeRefreshTokenParams{
 		ID:         id,
 		ReplacedBy: replacedBy,
 	}); err != nil {

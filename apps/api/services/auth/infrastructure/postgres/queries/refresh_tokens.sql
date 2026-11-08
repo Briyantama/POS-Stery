@@ -11,7 +11,7 @@ SELECT id, user_id, tenant_id, family_id, token_hash, issued_at, expires_at,
 FROM auth.refresh_tokens
 WHERE token_hash = $1;
 
--- name: RevokeRefreshToken :exec
+-- name: RevokeRefreshToken :execrows
 UPDATE auth.refresh_tokens
 SET revoked_at = NOW(), replaced_by = $2, updated_at = NOW()
 WHERE id = $1 AND revoked_at IS NULL;

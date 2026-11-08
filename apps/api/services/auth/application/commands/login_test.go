@@ -230,6 +230,22 @@ func TestLoginHandler_CashierWrongStore(t *testing.T) {
 	}
 }
 
+func TestLoginHandler_CashierWithoutAssignedStoreRejected(t *testing.T) {
+	user := cashierUser(t, uuid.New())
+	user.Roles[0].StoreID = nil // role carries no store
+	h := newLoginHandler(&stubUserRepo{user: user}, &stubStoreRepo{}, &stubSigner{})
+
+	_, err := h.Handle(context.Background(), commands.LoginCommand{
+		TenantID: validTenant(),
+		Email:    user.Email,
+		Password: "secret",
+		StoreID:  uuid.New().String(), // attacker-chosen
+	})
+	if !errors.Is(err, domain.ErrPermissionDenied) {
+		t.Fatalf("want ErrPermissionDenied, got %v", err)
+	}
+}
+
 func TestLoginHandler_AdminSuccess(t *testing.T) {
 	user := adminUser(t)
 	signer := &stubSigner{}

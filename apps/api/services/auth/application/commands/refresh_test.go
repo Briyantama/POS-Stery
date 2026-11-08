@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log/slog"
 	"testing"
 	"time"
@@ -19,6 +20,7 @@ import (
 // ---- refresh token repo stub ----
 
 type stubRefreshTokenRepo struct {
+	beforeRotate  func()
 	tokens        map[string]*domain.RefreshToken // keyed by token_hash
 	byID          map[uuid.UUID]*domain.RefreshToken
 	revokedIDs    []uuid.UUID
@@ -87,6 +89,13 @@ func (r *stubRefreshTokenRepo) ListActiveSessions(_ context.Context, userID, ten
 }
 
 func (r *stubRefreshTokenRepo) Rotate(_ context.Context, oldID uuid.UUID, newRT *domain.RefreshToken) error {
+	if r.beforeRotate != nil {
+		r.beforeRotate()
+	}
+	// mirrors the SQL: 0 rows affected when the old token is already revoked
+	if old, ok := r.byID[oldID]; ok && old.IsRevoked() {
+		return fmt.Errorf("%w: refresh token already rotated", domain.ErrUnauthenticated)
+	}
 	r.tokens[newRT.TokenHash] = newRT
 	r.byID[newRT.ID] = newRT
 	r.revokedIDs = append(r.revokedIDs, oldID)
@@ -96,6 +105,25 @@ func (r *stubRefreshTokenRepo) Rotate(_ context.Context, oldID uuid.UUID, newRT 
 		rt.ReplacedBy = &newRT.ID
 	}
 	return nil
+}
+
+func TestRefreshHandler_ConcurrentRotationRejected(t *testing.T) {
+	user := adminUser(t)
+	repo := newStubRefreshTokenRepo()
+	raw, rt := makeActiveRefreshToken(user.ID, user.TenantID)
+	repo.tokens[rt.TokenHash] = rt
+	repo.byID[rt.ID] = rt
+	// a parallel refresh revokes the token after FindByHash but before Rotate
+	repo.beforeRotate = func() { now := time.Now(); rt.RevokedAt = &now }
+
+	h := commands.NewRefreshHandler(repo, &stubUserRepo{user: user}, &stubSigner{}, discardLogger())
+	res, err := h.Handle(context.Background(), commands.RefreshCommand{RefreshToken: raw})
+	if !errors.Is(err, domain.ErrUnauthenticated) || res != nil {
+		t.Fatalf("want ErrUnauthenticated and no tokens, got res=%v err=%v", res, err)
+	}
+	if len(repo.byID) != 1 {
+		t.Error("replayed rotation must not store a new refresh token")
+	}
 }
 
 func (r *stubRefreshTokenRepo) RevokeAllForUser(_ context.Context, userID, tenantID uuid.UUID) error {

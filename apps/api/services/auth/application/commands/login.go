@@ -79,8 +79,8 @@ func (h *LoginHandler) Handle(ctx context.Context, cmd LoginCommand) (*LoginResu
 		if cmd.StoreID == "" {
 			return nil, domain.ErrStoreRequired
 		}
-		// Validate the requested store_id matches the assigned store
-		if storeIDPtr != nil && storeIDPtr.String() != cmd.StoreID {
+		// The role must be store-scoped and the requested store must be the assigned one
+		if storeIDPtr == nil || storeIDPtr.String() != cmd.StoreID {
 			return nil, fmt.Errorf("%w: store not assigned to this user", domain.ErrPermissionDenied)
 		}
 	}

@@ -164,7 +164,7 @@ func (q *Queries) RevokeFamilyTokens(ctx context.Context, familyID uuid.UUID) er
 	return err
 }
 
-const revokeRefreshToken = `-- name: RevokeRefreshToken :exec
+const revokeRefreshToken = `-- name: RevokeRefreshToken :execrows
 UPDATE auth.refresh_tokens
 SET revoked_at = NOW(), replaced_by = $2, updated_at = NOW()
 WHERE id = $1 AND revoked_at IS NULL
@@ -175,7 +175,10 @@ type RevokeRefreshTokenParams struct {
 	ReplacedBy *uuid.UUID
 }
 
-func (q *Queries) RevokeRefreshToken(ctx context.Context, arg RevokeRefreshTokenParams) error {
-	_, err := q.db.Exec(ctx, revokeRefreshToken, arg.ID, arg.ReplacedBy)
-	return err
+func (q *Queries) RevokeRefreshToken(ctx context.Context, arg RevokeRefreshTokenParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeRefreshToken, arg.ID, arg.ReplacedBy)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
