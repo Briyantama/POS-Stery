@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -79,14 +80,16 @@ func (h *UpdateStockHandler) Handle(ctx context.Context, cmd UpdateStockCommand)
 		return UpdateStockResult{}, fmt.Errorf("update stock: %w", err)
 	}
 
-	// 4. Load threshold; if absent we skip the alert.
+	// 2. Load threshold; no threshold configured means no alert. Other errors are logged: the stock change is committed.
 	threshold, err := h.thresholdRepo.GetThreshold(ctx, cmd.TenantID, cmd.StoreID, cmd.ProductID)
 	if err != nil {
-		// No threshold configured — not an error, just skip low-stock logic.
+		if !errors.Is(err, domain.ErrNotFound) {
+			slog.ErrorContext(ctx, "load stock threshold", "tenant_id", cmd.TenantID, "error", err)
+		}
 		return UpdateStockResult{Item: updated, LowStockAlert: false}, nil
 	}
 
-	// 5. Emit low-stock event when quantity is at or below the threshold.
+	// 3. Emit low-stock event when quantity is at or below the threshold.
 	if updated.Quantity <= threshold.MinQuantity {
 		event := domain.LowStockDetected{
 			TenantID:    cmd.TenantID,
