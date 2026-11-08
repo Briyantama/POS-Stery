@@ -78,8 +78,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      # @stery/kit is a file: link; npm ci does not install the link target's own dependencies.
       - name: install frontends
         run: |
+          (cd ../stery-kit/web && npm ci)
           (cd apps/admin && npm ci)
           (cd apps/cashier && npm ci)
       - name: check
