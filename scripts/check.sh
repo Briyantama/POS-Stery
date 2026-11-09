@@ -51,6 +51,8 @@ if has web; then
   for app in apps/admin apps/cashier; do
     echo "==> Web ($app): check"
     (cd "$app" && npm run check)
+    echo "==> Web ($app): lint"
+    (cd "$app" && npx oxlint src && npx eslint .)
     if grep -q '"test:unit"' "$app/package.json"; then
       echo "==> Web ($app): test:unit"
       (cd "$app" && npm run test:unit)
