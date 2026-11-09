@@ -14,13 +14,13 @@ import (
 	"github.com/Briyantama/POS-Stery/services/sales/application/commands"
 	"github.com/Briyantama/POS-Stery/services/sales/domain"
 	"github.com/Briyantama/stery-kit/go/authn"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 var (
-	tenantID = uuid.New()
-	storeID  = uuid.New()
-	userID   = uuid.New()
+	tenantID = uuid.NewV7()
+	storeID  = uuid.NewV7()
+	userID   = uuid.NewV7()
 )
 
 type stubVerifier struct{}
@@ -49,11 +49,11 @@ func (s *stubCreate) Handle(_ context.Context, cmd commands.CreateSaleCommand) (
 		return nil, s.err
 	}
 	sale := &domain.Sale{
-		ID: uuid.New(), TenantID: tenantID, StoreID: storeID, CashierID: userID,
-		Items:  []domain.SaleItem{{ID: uuid.New(), ProductID: uuid.New(), Quantity: 1, UnitPrice: 5, LineTotal: 5}},
+		ID: uuid.NewV7(), TenantID: tenantID, StoreID: storeID, CashierID: userID,
+		Items:  []domain.SaleItem{{ID: uuid.NewV7(), ProductID: uuid.NewV7(), Quantity: 1, UnitPrice: 5, LineTotal: 5}},
 		Status: "COMPLETED", Total: 5, Subtotal: 5, CompletedAt: time.Now(),
 	}
-	return &commands.CreateSaleResult{Sale: sale, Receipt: &domain.Receipt{ID: uuid.New(), SaleID: sale.ID, Snapshot: []byte(`{}`)}}, nil
+	return &commands.CreateSaleResult{Sale: sale, Receipt: &domain.Receipt{ID: uuid.NewV7(), SaleID: sale.ID, Snapshot: []byte(`{}`)}}, nil
 }
 
 type stubRead struct{ err error }
@@ -132,7 +132,7 @@ func TestSuccessEnvelopeAndClaimScope(t *testing.T) {
 // A body-supplied tenant_id is an unknown field: the strict decoder rejects it, so it can never override the claim.
 func TestBodyTenantIDNeverReachesCommand(t *testing.T) {
 	c := &stubCreate{}
-	body := `{"tenant_id":"` + uuid.NewString() + `","items":[]}`
+	body := `{"tenant_id":"` + uuid.NewV7().String() + `","items":[]}`
 	rec := do(newHandler(c, stubRead{}), "POST", "/api/v1/sales", "cashier", body)
 	if rec.Code != http.StatusBadRequest || c.got.TenantID != "" {
 		t.Fatalf("got %d, command tenant %q", rec.Code, c.got.TenantID)
@@ -140,7 +140,7 @@ func TestBodyTenantIDNeverReachesCommand(t *testing.T) {
 }
 
 func TestStatusCodes(t *testing.T) {
-	saleURL := "/api/v1/sales/" + uuid.NewString()
+	saleURL := "/api/v1/sales/" + uuid.NewV7().String()
 	cases := []struct {
 		name              string
 		method, path, tok string

@@ -7,7 +7,7 @@ import (
 
 	"github.com/Briyantama/POS-Stery/services/product/application/commands"
 	"github.com/Briyantama/POS-Stery/services/product/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // ── stubs ──────────────────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ func (r *stubProductRepo) Search(_ context.Context, _ uuid.UUID, _, _ string, _,
 
 func validCreateProductCmd() commands.CreateProductCommand {
 	return commands.CreateProductCommand{
-		TenantID:  uuid.New(),
+		TenantID:  uuid.NewV7(),
 		Name:      "Widget A",
 		SKU:       "WGT-001",
 		BasePrice: 9.99,
@@ -56,7 +56,7 @@ func validCreateProductCmd() commands.CreateProductCommand {
 
 func TestCreateProduct_MissingTenantID(t *testing.T) {
 	cmd := validCreateProductCmd()
-	cmd.TenantID = uuid.Nil
+	cmd.TenantID = uuid.Nil()
 
 	_, err := commands.NewCreateProductHandler(&stubProductRepo{}).Handle(context.Background(), cmd)
 	if !errors.Is(err, domain.ErrInvalidArgument) {
@@ -107,7 +107,7 @@ func TestCreateProduct_DuplicateSKU(t *testing.T) {
 func TestCreateProduct_CategoryOfOtherTenant(t *testing.T) {
 	repo := &stubProductRepo{foreignCategory: true}
 	cmd := validCreateProductCmd()
-	catID := uuid.New()
+	catID := uuid.NewV7()
 	cmd.CategoryID = &catID
 
 	_, err := commands.NewCreateProductHandler(repo).Handle(context.Background(), cmd)
@@ -120,9 +120,9 @@ func TestCreateProduct_CategoryOfOtherTenant(t *testing.T) {
 }
 
 func TestUpdateProduct_CategoryOfOtherTenant(t *testing.T) {
-	tenant := uuid.New()
-	repo := &stubProductRepo{foreignCategory: true, existing: &domain.Product{ID: uuid.New(), TenantID: tenant}}
-	catID := uuid.New()
+	tenant := uuid.NewV7()
+	repo := &stubProductRepo{foreignCategory: true, existing: &domain.Product{ID: uuid.NewV7(), TenantID: tenant}}
+	catID := uuid.NewV7()
 
 	_, err := commands.NewUpdateProductHandler(repo).Handle(context.Background(), commands.UpdateProductCommand{
 		TenantID: tenant, ProductID: repo.existing.ID, CategoryID: &catID, Name: "Widget",
@@ -137,7 +137,7 @@ func TestUpdateProduct_CategoryOfOtherTenant(t *testing.T) {
 
 func TestCreateProduct_HappyPath(t *testing.T) {
 	cmd := validCreateProductCmd()
-	catID := uuid.New()
+	catID := uuid.NewV7()
 	cmd.CategoryID = &catID
 	cmd.Barcode = "123456789"
 	cmd.Description = "A fine widget"
@@ -150,7 +150,7 @@ func TestCreateProduct_HappyPath(t *testing.T) {
 	if p == nil {
 		t.Fatal("expected product, got nil")
 	}
-	if p.ID == uuid.Nil {
+	if p.ID == uuid.Nil() {
 		t.Error("product ID must be set")
 	}
 	if p.Name != cmd.Name {
@@ -182,7 +182,7 @@ func TestCreateProduct_RejectsBlankAndOutOfRange(t *testing.T) {
 func TestUpdateProduct_OmittedIsActiveKeepsValue(t *testing.T) {
 	repo := &stubProductRepo{existing: &domain.Product{IsActive: true}}
 	p, err := commands.NewUpdateProductHandler(repo).Handle(context.Background(), commands.UpdateProductCommand{
-		TenantID: uuid.New(), ProductID: uuid.New(), Name: "n", BasePrice: 1,
+		TenantID: uuid.NewV7(), ProductID: uuid.NewV7(), Name: "n", BasePrice: 1,
 	})
 	if err != nil || !p.IsActive {
 		t.Fatalf("IsActive = %v, err = %v; want still active", p != nil && p.IsActive, err)

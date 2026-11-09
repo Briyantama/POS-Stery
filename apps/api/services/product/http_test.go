@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/Briyantama/stery-kit/go/authn"
-	"github.com/google/uuid"
+	"uuid"
 
 	"github.com/Briyantama/POS-Stery/services/product"
 	"github.com/Briyantama/POS-Stery/services/product/application/commands"
@@ -19,7 +19,7 @@ import (
 	"github.com/Briyantama/POS-Stery/services/product/domain"
 )
 
-var tenantID = uuid.New()
+var tenantID = uuid.NewV7()
 
 type verifier struct{}
 
@@ -37,7 +37,7 @@ type stub struct {
 }
 
 func (s *stub) prod() *domain.Product {
-	return &domain.Product{ID: uuid.New(), Name: "w", SKU: "s", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	return &domain.Product{ID: uuid.NewV7(), Name: "w", SKU: "s", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 }
 func (s *stub) Handle(_ context.Context, c commands.CreateProductCommand) (*domain.Product, error) {
 	s.gotTID = c.TenantID
@@ -78,7 +78,7 @@ func serve(s *stub, method, path, token, body string) *httptest.ResponseRecorder
 }
 
 func TestStatuses(t *testing.T) {
-	id := uuid.NewString()
+	id := uuid.NewV7().String()
 	ok := `{"name":"w","sku":"s"}`
 	tests := []struct {
 		name, method, path, token, body string
@@ -109,7 +109,7 @@ func TestStatuses(t *testing.T) {
 
 func TestEnvelopeAndTenantFromClaim(t *testing.T) {
 	// A body-supplied tenant_id is rejected (unknown field), so it can never override the claim.
-	if w := serve(&stub{}, "POST", "/api/v1/products", "admin", `{"name":"w","sku":"s","tenant_id":"`+uuid.NewString()+`"}`); w.Code != 400 {
+	if w := serve(&stub{}, "POST", "/api/v1/products", "admin", `{"name":"w","sku":"s","tenant_id":"`+uuid.NewV7().String()+`"}`); w.Code != 400 {
 		t.Fatalf("body tenant_id not rejected: %d", w.Code)
 	}
 	s := &stub{}

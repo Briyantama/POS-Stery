@@ -3,7 +3,7 @@ package domain
 import (
 	"context"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // SupplierRepository handles persistence of supplier records.

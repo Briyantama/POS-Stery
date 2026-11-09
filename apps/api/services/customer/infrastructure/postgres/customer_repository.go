@@ -10,9 +10,9 @@ import (
 	"github.com/Briyantama/POS-Stery/internal/db"
 	"github.com/Briyantama/POS-Stery/services/customer/domain"
 	"github.com/Briyantama/stery-kit/go/pgtenant"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"uuid"
 )
 
 // CustomerRepository is the PostgreSQL implementation of domain.CustomerRepository.

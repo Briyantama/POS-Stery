@@ -6,7 +6,7 @@ import (
 
 	"github.com/Briyantama/POS-Stery/services/auth/application"
 	"github.com/Briyantama/POS-Stery/services/auth/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 type LogoutAllCommand struct {

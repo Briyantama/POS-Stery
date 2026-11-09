@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Briyantama/POS-Stery/services/inventory/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // MaxPageSize is the largest page the list query returns.
@@ -38,10 +38,10 @@ func NewListItemsHandler(stockRepo domain.StockRepository) *ListItemsHandler {
 
 // Handle executes the ListItems query.
 func (h *ListItemsHandler) Handle(ctx context.Context, qry ListItemsQuery) (ListItemsResult, error) {
-	if qry.TenantID == uuid.Nil {
+	if qry.TenantID == uuid.Nil() {
 		return ListItemsResult{}, fmt.Errorf("tenantID required: %w", domain.ErrInvalidArgument)
 	}
-	if qry.StoreID == uuid.Nil {
+	if qry.StoreID == uuid.Nil() {
 		return ListItemsResult{}, fmt.Errorf("storeID required: %w", domain.ErrInvalidArgument)
 	}
 

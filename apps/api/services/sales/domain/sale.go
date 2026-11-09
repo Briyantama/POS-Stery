@@ -3,7 +3,7 @@ package domain
 import (
 	"time"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // Sale represents a completed point-of-sale transaction.

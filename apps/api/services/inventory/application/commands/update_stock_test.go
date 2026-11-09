@@ -7,7 +7,7 @@ import (
 
 	"github.com/Briyantama/POS-Stery/services/inventory/application/commands"
 	"github.com/Briyantama/POS-Stery/services/inventory/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // ── stubs ──────────────────────────────────────────────────────────────────────
@@ -74,10 +74,10 @@ func (p *failingPublisher) PublishLowStock(_ context.Context, _ domain.LowStockD
 
 func stockItem(qty int64) *domain.StockItem {
 	return &domain.StockItem{
-		ID:        uuid.New(),
-		TenantID:  uuid.New(),
-		StoreID:   uuid.New(),
-		ProductID: uuid.New(),
+		ID:        uuid.NewV7(),
+		TenantID:  uuid.NewV7(),
+		StoreID:   uuid.NewV7(),
+		ProductID: uuid.NewV7(),
 		Quantity:  qty,
 	}
 }
@@ -96,7 +96,7 @@ func validUpdateCmd(tenantID, storeID, productID uuid.UUID, delta int64) command
 // ── tests ──────────────────────────────────────────────────────────────────────
 
 func TestUpdateStock_MissingTenantID(t *testing.T) {
-	cmd := validUpdateCmd(uuid.Nil, uuid.New(), uuid.New(), 5)
+	cmd := validUpdateCmd(uuid.Nil(), uuid.NewV7(), uuid.NewV7(), 5)
 	_, err := commands.NewUpdateStockHandler(&stubStockRepo{}, &stubThresholdRepo{}, &stubInvPublisher{}).Handle(context.Background(), cmd)
 	if !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("want ErrInvalidArgument, got %v", err)
@@ -104,7 +104,7 @@ func TestUpdateStock_MissingTenantID(t *testing.T) {
 }
 
 func TestUpdateStock_MissingStoreID(t *testing.T) {
-	cmd := validUpdateCmd(uuid.New(), uuid.Nil, uuid.New(), 5)
+	cmd := validUpdateCmd(uuid.NewV7(), uuid.Nil(), uuid.NewV7(), 5)
 	_, err := commands.NewUpdateStockHandler(&stubStockRepo{}, &stubThresholdRepo{}, &stubInvPublisher{}).Handle(context.Background(), cmd)
 	if !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("want ErrInvalidArgument, got %v", err)
@@ -112,7 +112,7 @@ func TestUpdateStock_MissingStoreID(t *testing.T) {
 }
 
 func TestUpdateStock_MissingProductID(t *testing.T) {
-	cmd := validUpdateCmd(uuid.New(), uuid.New(), uuid.Nil, 5)
+	cmd := validUpdateCmd(uuid.NewV7(), uuid.NewV7(), uuid.Nil(), 5)
 	_, err := commands.NewUpdateStockHandler(&stubStockRepo{}, &stubThresholdRepo{}, &stubInvPublisher{}).Handle(context.Background(), cmd)
 	if !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("want ErrInvalidArgument, got %v", err)
@@ -120,7 +120,7 @@ func TestUpdateStock_MissingProductID(t *testing.T) {
 }
 
 func TestUpdateStock_ZeroDelta(t *testing.T) {
-	cmd := validUpdateCmd(uuid.New(), uuid.New(), uuid.New(), 0)
+	cmd := validUpdateCmd(uuid.NewV7(), uuid.NewV7(), uuid.NewV7(), 0)
 	_, err := commands.NewUpdateStockHandler(&stubStockRepo{}, &stubThresholdRepo{}, &stubInvPublisher{}).Handle(context.Background(), cmd)
 	if !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("want ErrInvalidArgument for zero delta, got %v", err)
@@ -131,7 +131,7 @@ func TestUpdateStock_WouldGoNegative(t *testing.T) {
 	// The repo's atomic UPDATE rejects the decrement; the handler must not
 	// depend on a (racy) prior read.
 	repo := &stubStockRepo{updateErr: domain.ErrStockWouldGoNegative}
-	cmd := validUpdateCmd(uuid.New(), uuid.New(), uuid.New(), -5)
+	cmd := validUpdateCmd(uuid.NewV7(), uuid.NewV7(), uuid.NewV7(), -5)
 
 	_, err := commands.NewUpdateStockHandler(repo, &stubThresholdRepo{}, &stubInvPublisher{}).Handle(context.Background(), cmd)
 	if !errors.Is(err, domain.ErrStockWouldGoNegative) {

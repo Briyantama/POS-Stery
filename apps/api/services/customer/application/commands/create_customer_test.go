@@ -7,7 +7,7 @@ import (
 
 	"github.com/Briyantama/POS-Stery/services/customer/application/commands"
 	"github.com/Briyantama/POS-Stery/services/customer/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // ── stubs ──────────────────────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ func (p *stubCustomerPublisher) PublishCustomerNew(_ context.Context, _, _, _ st
 // ── tests ──────────────────────────────────────────────────────────────────────
 
 func TestCreateCustomer_MissingTenantID(t *testing.T) {
-	cmd := commands.CreateCustomerCommand{TenantID: uuid.Nil, Name: "Jane"}
+	cmd := commands.CreateCustomerCommand{TenantID: uuid.Nil(), Name: "Jane"}
 
 	_, err := commands.NewCreateCustomerHandler(&stubCustomerRepo{}, &stubCustomerPublisher{}).Handle(context.Background(), cmd)
 	if !errors.Is(err, domain.ErrInvalidArgument) {
@@ -50,7 +50,7 @@ func TestCreateCustomer_MissingTenantID(t *testing.T) {
 }
 
 func TestCreateCustomer_MissingName(t *testing.T) {
-	cmd := commands.CreateCustomerCommand{TenantID: uuid.New(), Name: ""}
+	cmd := commands.CreateCustomerCommand{TenantID: uuid.NewV7(), Name: ""}
 
 	_, err := commands.NewCreateCustomerHandler(&stubCustomerRepo{}, &stubCustomerPublisher{}).Handle(context.Background(), cmd)
 	if !errors.Is(err, domain.ErrInvalidArgument) {
@@ -60,7 +60,7 @@ func TestCreateCustomer_MissingName(t *testing.T) {
 
 func TestCreateCustomer_RepoError(t *testing.T) {
 	repo := &stubCustomerRepo{createErr: errors.New("db down")}
-	cmd := commands.CreateCustomerCommand{TenantID: uuid.New(), Name: "Jane Doe"}
+	cmd := commands.CreateCustomerCommand{TenantID: uuid.NewV7(), Name: "Jane Doe"}
 
 	_, err := commands.NewCreateCustomerHandler(repo, &stubCustomerPublisher{}).Handle(context.Background(), cmd)
 	if err == nil {
@@ -70,7 +70,7 @@ func TestCreateCustomer_RepoError(t *testing.T) {
 
 func TestCreateCustomer_PublishFailureIsNonFatal(t *testing.T) {
 	pub := &stubCustomerPublisher{err: errors.New("stream down")}
-	cmd := commands.CreateCustomerCommand{TenantID: uuid.New(), Name: "Jane Doe", Email: "jane@example.com"}
+	cmd := commands.CreateCustomerCommand{TenantID: uuid.NewV7(), Name: "Jane Doe", Email: "jane@example.com"}
 
 	c, err := commands.NewCreateCustomerHandler(&stubCustomerRepo{}, pub).Handle(context.Background(), cmd)
 	if err != nil {
@@ -84,7 +84,7 @@ func TestCreateCustomer_PublishFailureIsNonFatal(t *testing.T) {
 func TestCreateCustomer_HappyPath(t *testing.T) {
 	pub := &stubCustomerPublisher{}
 	cmd := commands.CreateCustomerCommand{
-		TenantID: uuid.New(),
+		TenantID: uuid.NewV7(),
 		Name:     "John Smith",
 		Phone:    "08111111111",
 		Email:    "john@example.com",
@@ -94,7 +94,7 @@ func TestCreateCustomer_HappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if c.ID == uuid.Nil {
+	if c.ID == uuid.Nil() {
 		t.Error("customer ID must be set")
 	}
 	if c.Name != cmd.Name {
@@ -110,10 +110,10 @@ func TestCreateCustomer_HappyPath(t *testing.T) {
 
 func TestCreateCustomer_RejectsBadEmailAndLongName(t *testing.T) {
 	for name, cmd := range map[string]commands.CreateCustomerCommand{
-		"bad email":     {TenantID: uuid.New(), Name: "Jane", Email: "not-an-email"},
-		"display email": {TenantID: uuid.New(), Name: "Jane", Email: "Jane <j@x.io>"},
-		"whitespace":    {TenantID: uuid.New(), Name: "   "},
-		"name too long": {TenantID: uuid.New(), Name: string(make([]byte, 201))},
+		"bad email":     {TenantID: uuid.NewV7(), Name: "Jane", Email: "not-an-email"},
+		"display email": {TenantID: uuid.NewV7(), Name: "Jane", Email: "Jane <j@x.io>"},
+		"whitespace":    {TenantID: uuid.NewV7(), Name: "   "},
+		"name too long": {TenantID: uuid.NewV7(), Name: string(make([]byte, 201))},
 	} {
 		if _, err := commands.NewCreateCustomerHandler(&stubCustomerRepo{}, &stubCustomerPublisher{}).Handle(context.Background(), cmd); !errors.Is(err, domain.ErrInvalidArgument) {
 			t.Errorf("%s: err = %v, want ErrInvalidArgument", name, err)

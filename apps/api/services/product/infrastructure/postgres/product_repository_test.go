@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"uuid"
 
 	"github.com/Briyantama/POS-Stery/internal/testdb"
 	"github.com/Briyantama/POS-Stery/services/product/domain"
@@ -25,7 +25,7 @@ func setup(t *testing.T) (repo *postgres.ProductRepository, pool *pgxpool.Pool, 
 	}
 	t.Cleanup(pool.Close)
 
-	tenantA, tenantB, catA, catB = uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	tenantA, tenantB, catA, catB = uuid.NewV7(), uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
 	for _, c := range []struct{ id, tenant uuid.UUID }{{catA, tenantA}, {catB, tenantB}} {
 		if _, err := pool.Exec(context.Background(), `INSERT INTO product.categories (id, tenant_id, name) VALUES ($1, $2, 'c')`, c.id, c.tenant); err != nil {
 			t.Fatal(err)
@@ -41,7 +41,7 @@ func TestCategoryExists_OnlyOwnTenant(t *testing.T) {
 		name string
 		id   uuid.UUID
 		want bool
-	}{{"own", catA, true}, {"other tenant", catB, false}, {"unknown", uuid.New(), false}} {
+	}{{"own", catA, true}, {"other tenant", catB, false}, {"unknown", uuid.NewV7(), false}} {
 		got, err := repo.CategoryExists(context.Background(), tenantA, tc.id)
 		if err != nil || got != tc.want {
 			t.Errorf("%s: got %v, %v; want %v", tc.name, got, err, tc.want)
@@ -52,7 +52,7 @@ func TestCategoryExists_OnlyOwnTenant(t *testing.T) {
 func TestCreateUpdate_CategoryOfOtherTenantRejected(t *testing.T) {
 	repo, _, tenantA, _, catA, catB := setup(t)
 	ctx := context.Background()
-	p := &domain.Product{ID: uuid.New(), TenantID: tenantA, CategoryID: &catB, Name: "w", SKU: "s", IsActive: true}
+	p := &domain.Product{ID: uuid.NewV7(), TenantID: tenantA, CategoryID: &catB, Name: "w", SKU: "s", IsActive: true}
 
 	if err := repo.Create(ctx, tenantA, p); !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("create with foreign category: err = %v, want ErrInvalidArgument", err)
@@ -83,7 +83,7 @@ func TestRLS_TenantSeesOnlyOwnRows(t *testing.T) {
 	}
 	t.Cleanup(app.Close)
 
-	tenantA, tenantB := uuid.New(), uuid.New()
+	tenantA, tenantB := uuid.NewV7(), uuid.NewV7()
 	for _, tenant := range []uuid.UUID{tenantA, tenantB} {
 		if _, err := admin.Exec(ctx, `INSERT INTO product.categories (tenant_id, name) VALUES ($1, 'c')`, tenant); err != nil {
 			t.Fatal(err)

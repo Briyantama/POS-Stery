@@ -3,7 +3,7 @@ package domain
 import (
 	"time"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // StockUpdateReason describes why a stock level changed.

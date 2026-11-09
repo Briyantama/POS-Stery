@@ -13,7 +13,7 @@ import (
 	"github.com/Briyantama/POS-Stery/services/auth/domain"
 	"github.com/Briyantama/stery-kit/go/authn"
 	"github.com/Briyantama/stery-kit/go/httpx"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 const maxBody = 1 << 20

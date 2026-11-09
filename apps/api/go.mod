@@ -1,14 +1,13 @@
 module github.com/Briyantama/POS-Stery
 
-go 1.25.1
+go 1.27.3
 
 require (
+	github.com/Briyantama/stery-kit/go v0.0.0
 	github.com/alicebob/miniredis/v2 v2.39.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/redis/go-redis/v9 v9.22.0
-	github.com/Briyantama/stery-kit/go v0.0.0
 	golang.org/x/crypto v0.40.0
 )
 

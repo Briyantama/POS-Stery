@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Briyantama/POS-Stery/services/customer/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // AddLoyaltyPointsCommand carries the data to add loyalty points after a sale.
@@ -43,13 +43,13 @@ func NewAddLoyaltyPointsHandler(
 // Handle validates the command, verifies the customer exists, records the
 // loyalty entry and returns the updated total.
 func (h *AddLoyaltyPointsHandler) Handle(ctx context.Context, cmd AddLoyaltyPointsCommand) (*AddLoyaltyPointsResult, error) {
-	if cmd.TenantID == uuid.Nil {
+	if cmd.TenantID == uuid.Nil() {
 		return nil, fmt.Errorf("tenant_id is required: %w", domain.ErrInvalidArgument)
 	}
-	if cmd.CustomerID == uuid.Nil {
+	if cmd.CustomerID == uuid.Nil() {
 		return nil, fmt.Errorf("customer_id is required: %w", domain.ErrInvalidArgument)
 	}
-	if cmd.SaleID == uuid.Nil {
+	if cmd.SaleID == uuid.Nil() {
 		return nil, fmt.Errorf("sale_id is required: %w", domain.ErrInvalidArgument)
 	}
 	if cmd.Points <= 0 {
@@ -70,7 +70,7 @@ func (h *AddLoyaltyPointsHandler) Handle(ctx context.Context, cmd AddLoyaltyPoin
 	}
 
 	entry := &domain.LoyaltyEntry{
-		ID:          uuid.New(),
+		ID:          uuid.NewV7(),
 		TenantID:    cmd.TenantID,
 		CustomerID:  cmd.CustomerID,
 		Points:      cmd.Points,

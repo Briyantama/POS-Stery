@@ -7,9 +7,9 @@ import (
 
 	"github.com/Briyantama/POS-Stery/services/inventory/domain"
 	"github.com/Briyantama/stery-kit/go/pgtenant"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"uuid"
 )
 
 // ThresholdRepository implements domain.ThresholdRepository using PostgreSQL.

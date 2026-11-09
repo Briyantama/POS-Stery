@@ -7,9 +7,9 @@ import (
 
 	"github.com/Briyantama/POS-Stery/services/auth/domain"
 	"github.com/Briyantama/POS-Stery/services/auth/infrastructure/postgres/db"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"uuid"
 )
 
 func (r *RefreshTokenRepository) Rotate(ctx context.Context, oldID uuid.UUID, newRT *domain.RefreshToken) error {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // Product is the core aggregate for the product bounded context.

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Briyantama/POS-Stery/services/supplier/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // AddSupplierCommand carries the data needed to register a new supplier.
@@ -30,7 +30,7 @@ func NewAddSupplierHandler(repo domain.SupplierRepository) *AddSupplierHandler {
 
 // Handle executes the AddSupplier use case.
 func (h *AddSupplierHandler) Handle(ctx context.Context, cmd AddSupplierCommand) (*domain.Supplier, error) {
-	if cmd.TenantID == uuid.Nil {
+	if cmd.TenantID == uuid.Nil() {
 		return nil, fmt.Errorf("tenantID required: %w", domain.ErrInvalidArgument)
 	}
 	if cmd.Name == "" {

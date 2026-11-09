@@ -3,7 +3,7 @@ package domain
 import (
 	"context"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // StockRepository handles persistence of stock items.

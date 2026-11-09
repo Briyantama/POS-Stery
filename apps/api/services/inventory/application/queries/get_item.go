@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Briyantama/POS-Stery/services/inventory/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // GetItemQuery identifies the stock item to retrieve.
@@ -27,13 +27,13 @@ func NewGetItemHandler(stockRepo domain.StockRepository) *GetItemHandler {
 
 // Handle executes the GetItem query.
 func (h *GetItemHandler) Handle(ctx context.Context, qry GetItemQuery) (*domain.StockItem, error) {
-	if qry.TenantID == uuid.Nil {
+	if qry.TenantID == uuid.Nil() {
 		return nil, fmt.Errorf("tenantID required: %w", domain.ErrInvalidArgument)
 	}
-	if qry.StoreID == uuid.Nil {
+	if qry.StoreID == uuid.Nil() {
 		return nil, fmt.Errorf("storeID required: %w", domain.ErrInvalidArgument)
 	}
-	if qry.ProductID == uuid.Nil {
+	if qry.ProductID == uuid.Nil() {
 		return nil, fmt.Errorf("productID required: %w", domain.ErrInvalidArgument)
 	}
 

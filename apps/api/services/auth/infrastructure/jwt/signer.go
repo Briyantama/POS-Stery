@@ -9,7 +9,7 @@ import (
 
 	"github.com/Briyantama/POS-Stery/services/auth/application"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 const accessTokenTTL = 10 * time.Minute
@@ -53,18 +53,16 @@ func NewRSASigner(privateKeyPath, publicKeyPath string, blacklist application.Bl
 func (s *RSASigner) Issue(claims application.TokenClaims) (string, time.Time, error) {
 	now := time.Now()
 	expiresAt := now.Add(accessTokenTTL)
-	jti := uuid.New().String()
+	jti := uuid.NewV4().String()
 	jwtClaims := posClaims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			ID:        jti,
-			Subject:   claims.UserID,
-			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(expiresAt),
-		},
-		TenantID: claims.TenantID,
-		StoreID:  claims.StoreID,
-		Role:     claims.Role,
-		Email:    claims.Email,
+		ID:        jti,
+		Subject:   claims.UserID,
+		IssuedAt:  jwt.NewNumericDate(now),
+		ExpiresAt: jwt.NewNumericDate(expiresAt),
+		TenantID:  claims.TenantID,
+		StoreID:   claims.StoreID,
+		Role:      claims.Role,
+		Email:     claims.Email,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwtClaims)

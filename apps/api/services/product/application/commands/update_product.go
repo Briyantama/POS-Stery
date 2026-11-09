@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/Briyantama/POS-Stery/services/product/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // UpdateProductCommand carries the data required to update an existing product.

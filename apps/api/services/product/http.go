@@ -9,7 +9,7 @@ import (
 
 	"github.com/Briyantama/stery-kit/go/authn"
 	"github.com/Briyantama/stery-kit/go/httpx"
-	"github.com/google/uuid"
+	"uuid"
 
 	"github.com/Briyantama/POS-Stery/services/product/application/commands"
 	"github.com/Briyantama/POS-Stery/services/product/application/queries"
@@ -80,7 +80,7 @@ func tenant(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	id, err := uuid.Parse(c.TenantID)
 	if !ok || err != nil {
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized")
-		return uuid.Nil, false
+		return uuid.Nil(), false
 	}
 	return id, true
 }

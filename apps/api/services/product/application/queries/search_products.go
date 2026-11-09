@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Briyantama/POS-Stery/services/product/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // SearchProductsQuery carries the parameters for a product search.

@@ -9,7 +9,7 @@ import (
 
 	"github.com/Briyantama/stery-kit/go/authn"
 	"github.com/Briyantama/stery-kit/go/httpx"
-	"github.com/google/uuid"
+	"uuid"
 
 	"github.com/Briyantama/POS-Stery/services/supplier/application/commands"
 	"github.com/Briyantama/POS-Stery/services/supplier/domain"

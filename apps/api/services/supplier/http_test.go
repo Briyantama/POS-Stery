@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/Briyantama/stery-kit/go/authn"
-	"github.com/google/uuid"
+	"uuid"
 
 	"github.com/Briyantama/POS-Stery/services/supplier"
 	"github.com/Briyantama/POS-Stery/services/supplier/application/commands"
@@ -19,8 +19,8 @@ import (
 )
 
 var (
-	tenantID = uuid.New()
-	storeID  = uuid.New()
+	tenantID = uuid.NewV7()
+	storeID  = uuid.NewV7()
 )
 
 type stubVerifier struct{}
@@ -40,13 +40,13 @@ type stub struct {
 
 func (s *stub) Handle(_ context.Context, cmd commands.AddSupplierCommand) (*domain.Supplier, error) {
 	s.tenant = cmd.TenantID
-	return &domain.Supplier{ID: uuid.New(), TenantID: cmd.TenantID, Name: cmd.Name}, s.err
+	return &domain.Supplier{ID: uuid.NewV7(), TenantID: cmd.TenantID, Name: cmd.Name}, s.err
 }
 
 type orderStub struct{ *stub }
 
 func (s orderStub) Handle(_ context.Context, cmd commands.CreatePurchaseOrderCommand) (*domain.PurchaseOrder, error) {
-	return &domain.PurchaseOrder{ID: uuid.New(), SupplierID: cmd.SupplierID, Status: domain.StatusPending}, s.err
+	return &domain.PurchaseOrder{ID: uuid.NewV7(), SupplierID: cmd.SupplierID, Status: domain.StatusPending}, s.err
 }
 
 type receiveStub struct{ *stub }
@@ -58,13 +58,13 @@ func (s receiveStub) Handle(_ context.Context, cmd commands.ReceiveStockCommand)
 type listStub struct{ *stub }
 
 func (s listStub) List(_ context.Context, _ uuid.UUID, _, _ int) ([]*domain.Supplier, int, error) {
-	return []*domain.Supplier{{ID: uuid.New(), Name: "acme"}}, 1, s.err
+	return []*domain.Supplier{{ID: uuid.NewV7(), Name: "acme"}}, 1, s.err
 }
 
 type orderListStub struct{ *stub }
 
 func (s orderListStub) List(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]*domain.PurchaseOrder, int, error) {
-	return []*domain.PurchaseOrder{{ID: uuid.New(), Status: domain.StatusPending}}, 1, s.err
+	return []*domain.PurchaseOrder{{ID: uuid.NewV7(), Status: domain.StatusPending}}, 1, s.err
 }
 
 func newMux(s *stub) *http.ServeMux {
@@ -112,16 +112,16 @@ func TestEnvelopeAndTenantFromClaim(t *testing.T) {
 		t.Fatalf("tenant must come from claims, got %s", s.tenant)
 	}
 	// A body-supplied tenant_id is rejected (strict decoding), never used.
-	s.tenant = uuid.Nil
-	rec = do(mux, "POST", "/api/v1/suppliers", "admin", fmt.Sprintf(`{"name":"acme","tenant_id":%q}`, uuid.New()))
-	if rec.Code != 400 || s.tenant != uuid.Nil {
+	s.tenant = uuid.Nil()
+	rec = do(mux, "POST", "/api/v1/suppliers", "admin", fmt.Sprintf(`{"name":"acme","tenant_id":%q}`, uuid.NewV7()))
+	if rec.Code != 400 || s.tenant != uuid.Nil() {
 		t.Fatalf("body tenant_id: want 400 and no call, got %d tenant=%s", rec.Code, s.tenant)
 	}
 }
 
 func TestStatusCodes(t *testing.T) {
-	pid, oid := uuid.NewString(), uuid.NewString()
-	order := fmt.Sprintf(`{"supplier_id":%q,"items":[{"product_id":%q,"quantity_ordered":1,"unit_cost":2}]}`, uuid.NewString(), pid)
+	pid, oid := uuid.NewV7().String(), uuid.NewV7().String()
+	order := fmt.Sprintf(`{"supplier_id":%q,"items":[{"product_id":%q,"quantity_ordered":1,"unit_cost":2}]}`, uuid.NewV7().String(), pid)
 	recv := fmt.Sprintf(`{"items_received":[{"product_id":%q,"quantity_received":1}]}`, pid)
 	tests := []struct {
 		name         string

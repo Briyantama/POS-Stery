@@ -3,7 +3,7 @@ package domain
 import (
 	"time"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 const RefreshTokenTTL = 30 * 24 * time.Hour

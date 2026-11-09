@@ -7,7 +7,7 @@ import (
 
 	proddomain "github.com/Briyantama/POS-Stery/services/product/domain"
 	"github.com/Briyantama/POS-Stery/services/sales/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // productFinder is the slice of product's repository the price port needs.

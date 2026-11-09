@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Briyantama/stery-kit/go/events"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // SubjectInventoryReplenished is the event type of the stock-receipt event.
@@ -47,7 +47,7 @@ func (p *EventPublisher) PublishReplenished(
 		return fmt.Errorf("marshal replenished payload: %w", err)
 	}
 	if err := p.pub.Publish(ctx, events.Envelope{
-		EventID:       uuid.NewString(),
+		EventID:       uuid.NewV7().String(),
 		EventType:     SubjectInventoryReplenished,
 		SchemaVersion: 1,
 		TenantID:      tenantID,

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Briyantama/POS-Stery/services/inventory/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // AddItemCommand carries the data needed to register a product in inventory.
@@ -36,13 +36,13 @@ func NewAddItemHandler(
 
 // Handle executes the AddItem use case.
 func (h *AddItemHandler) Handle(ctx context.Context, cmd AddItemCommand) (*domain.StockItem, error) {
-	if cmd.TenantID == uuid.Nil {
+	if cmd.TenantID == uuid.Nil() {
 		return nil, fmt.Errorf("tenantID required: %w", domain.ErrInvalidArgument)
 	}
-	if cmd.StoreID == uuid.Nil {
+	if cmd.StoreID == uuid.Nil() {
 		return nil, fmt.Errorf("storeID required: %w", domain.ErrInvalidArgument)
 	}
-	if cmd.ProductID == uuid.Nil {
+	if cmd.ProductID == uuid.Nil() {
 		return nil, fmt.Errorf("productID required: %w", domain.ErrInvalidArgument)
 	}
 	if cmd.InitialQuantity < 0 {

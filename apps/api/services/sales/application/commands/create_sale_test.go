@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/google/uuid"
+	"uuid"
 
 	"github.com/Briyantama/POS-Stery/services/sales/application/commands"
 	"github.com/Briyantama/POS-Stery/services/sales/domain"
@@ -67,11 +67,11 @@ func (s *stubPublisher) PublishSaleCompleted(_ context.Context, _ *domain.Sale) 
 
 func validCmd() commands.CreateSaleCommand {
 	return commands.CreateSaleCommand{
-		TenantID:  uuid.New().String(),
-		StoreID:   uuid.New().String(),
-		CashierID: uuid.New().String(),
+		TenantID:  uuid.NewV7().String(),
+		StoreID:   uuid.NewV7().String(),
+		CashierID: uuid.NewV7().String(),
 		Items: []commands.SaleItemInput{
-			{ProductID: uuid.New().String(), Quantity: 2},
+			{ProductID: uuid.NewV7().String(), Quantity: 2},
 		},
 	}
 }
@@ -130,7 +130,7 @@ func TestCreateSaleHandler_StockShortage(t *testing.T) {
 func TestCreateSaleHandler_DBFailureTriggersCompensation(t *testing.T) {
 	cmd := validCmd()
 	cmd.Items = append(cmd.Items, commands.SaleItemInput{
-		ProductID: uuid.New().String(), Quantity: 1,
+		ProductID: uuid.NewV7().String(), Quantity: 1,
 	})
 
 	inv := &stubInventory{}
@@ -152,7 +152,7 @@ func TestCreateSaleHandler_DBFailureTriggersCompensation(t *testing.T) {
 func TestCreateSaleHandler_HappyPath(t *testing.T) {
 	cmd := validCmd()
 	cmd.Items = []commands.SaleItemInput{
-		{ProductID: uuid.New().String(), Quantity: 3, Discount: 1.0},
+		{ProductID: uuid.NewV7().String(), Quantity: 3, Discount: 1.0},
 	}
 
 	inv := &stubInventory{}

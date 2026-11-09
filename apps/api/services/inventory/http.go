@@ -13,7 +13,7 @@ import (
 	"github.com/Briyantama/POS-Stery/services/inventory/domain"
 	"github.com/Briyantama/stery-kit/go/authn"
 	"github.com/Briyantama/stery-kit/go/httpx"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 const (
@@ -118,7 +118,7 @@ func scope(w http.ResponseWriter, r *http.Request) (tenant, store uuid.UUID, ok 
 	store, serr := uuid.Parse(c.StoreID)
 	if terr != nil || serr != nil {
 		httpx.WriteError(w, http.StatusForbidden, "forbidden")
-		return uuid.Nil, uuid.Nil, false
+		return uuid.Nil(), uuid.Nil(), false
 	}
 	return tenant, store, true
 }
@@ -127,7 +127,7 @@ func productID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	id, err := uuid.Parse(r.PathValue("product_id"))
 	if err != nil {
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "invalid product id")
-		return uuid.Nil, false
+		return uuid.Nil(), false
 	}
 	return id, true
 }

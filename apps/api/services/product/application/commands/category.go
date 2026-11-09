@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Briyantama/POS-Stery/services/product/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // validPrice bounds money to NUMERIC(12,2) so overflow is a 422, not a Postgres 500; NaN fails too.

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/Briyantama/POS-Stery/services/product/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // CreateProductCommand carries the data required to create a new product.
@@ -34,7 +34,7 @@ func NewCreateProductHandler(repo domain.ProductRepository) *CreateProductHandle
 // Handle validates the command, constructs a Product aggregate and persists it.
 func (h *CreateProductHandler) Handle(ctx context.Context, cmd CreateProductCommand) (*domain.Product, error) {
 	cmd.Name, cmd.SKU = strings.TrimSpace(cmd.Name), strings.TrimSpace(cmd.SKU)
-	if cmd.TenantID == uuid.Nil {
+	if cmd.TenantID == uuid.Nil() {
 		return nil, fmt.Errorf("tenant_id is required: %w", domain.ErrInvalidArgument)
 	}
 	if cmd.Name == "" {
@@ -51,7 +51,7 @@ func (h *CreateProductHandler) Handle(ctx context.Context, cmd CreateProductComm
 	}
 
 	p := &domain.Product{
-		ID:          uuid.New(),
+		ID:          uuid.NewV7(),
 		TenantID:    cmd.TenantID,
 		CategoryID:  cmd.CategoryID,
 		Name:        cmd.Name,

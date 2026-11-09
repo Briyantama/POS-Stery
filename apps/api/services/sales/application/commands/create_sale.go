@@ -9,7 +9,7 @@ import (
 
 	"github.com/Briyantama/POS-Stery/services/sales/application"
 	"github.com/Briyantama/POS-Stery/services/sales/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // CreateSaleCommand carries the validated inputs for a new sale transaction.
@@ -118,7 +118,7 @@ func (h *CreateSaleHandler) Handle(ctx context.Context, cmd CreateSaleCommand) (
 		subtotal += lineTotal
 
 		items = append(items, domain.SaleItem{
-			ID:        uuid.New(),
+			ID:        uuid.NewV7(),
 			TenantID:  tenantID,
 			ProductID: productID,
 			Quantity:  input.Quantity,
@@ -133,7 +133,7 @@ func (h *CreateSaleHandler) Handle(ctx context.Context, cmd CreateSaleCommand) (
 	}
 	total := subtotal - cmd.DiscountAmount
 
-	saleID := uuid.New()
+	saleID := uuid.NewV7()
 
 	// Fill in SaleID on each item now that saleID is known.
 	for i := range items {
@@ -190,7 +190,7 @@ func (h *CreateSaleHandler) Handle(ctx context.Context, cmd CreateSaleCommand) (
 	}
 
 	receipt := &domain.Receipt{
-		ID:       uuid.New(),
+		ID:       uuid.NewV7(),
 		TenantID: tenantID,
 		StoreID:  storeID,
 		SaleID:   saleID,

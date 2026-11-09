@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:18
+        image: postgres:18.6
         env:
           POSTGRES_USER: pos
           POSTGRES_PASSWORD: pos
@@ -55,7 +55,7 @@ jobs:
       - name: Start Dragonfly
         run: docker compose -f deploy/docker-compose.yml up -d dragonfly
       - name: golangci-lint
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
       - name: check
         run: bash scripts/check.sh
 

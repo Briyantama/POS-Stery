@@ -12,7 +12,7 @@ import (
 	"github.com/Briyantama/POS-Stery/services/customer/domain"
 	"github.com/Briyantama/stery-kit/go/authn"
 	"github.com/Briyantama/stery-kit/go/httpx"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 const (
@@ -57,7 +57,7 @@ func NewHTTPHandler(c createHandler, l loyaltyHandler, customers customerReader,
 // allow admin and cashier; awarding points is admin-only (a cashier must not mint points).
 func (h *HTTPHandler) Register(mux *http.ServeMux) {
 	guard := func(f http.HandlerFunc, roles ...string) http.Handler {
-		var next http.Handler = authn.WithRole(roles...)(f)
+		next := authn.WithRole(roles...)(f)
 		if h.requireStore != nil {
 			next = h.requireStore(next)
 		}
@@ -93,12 +93,12 @@ func tenant(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	cl, ok := authn.FromContext(r.Context())
 	if !ok {
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized")
-		return uuid.Nil, false
+		return uuid.Nil(), false
 	}
 	id, err := uuid.Parse(cl.TenantID)
 	if err != nil {
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized")
-		return uuid.Nil, false
+		return uuid.Nil(), false
 	}
 	return id, true
 }
@@ -107,7 +107,7 @@ func customerID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	id, err := uuid.Parse(r.PathValue("customer_id"))
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid customer id")
-		return uuid.Nil, false
+		return uuid.Nil(), false
 	}
 	return id, true
 }

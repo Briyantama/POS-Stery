@@ -10,10 +10,10 @@ import (
 	"github.com/Briyantama/POS-Stery/internal/db"
 	"github.com/Briyantama/POS-Stery/services/product/domain"
 	"github.com/Briyantama/stery-kit/go/pgtenant"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"uuid"
 )
 
 // ProductRepository is the PostgreSQL implementation of domain.ProductRepository.

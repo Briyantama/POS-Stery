@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Briyantama/POS-Stery/services/inventory/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // SetThresholdCommand carries the data needed to configure a low-stock threshold.
@@ -28,13 +28,13 @@ func NewSetThresholdHandler(thresholdRepo domain.ThresholdRepository) *SetThresh
 
 // Handle executes the SetThreshold use case.
 func (h *SetThresholdHandler) Handle(ctx context.Context, cmd SetThresholdCommand) error {
-	if cmd.TenantID == uuid.Nil {
+	if cmd.TenantID == uuid.Nil() {
 		return fmt.Errorf("tenantID required: %w", domain.ErrInvalidArgument)
 	}
-	if cmd.StoreID == uuid.Nil {
+	if cmd.StoreID == uuid.Nil() {
 		return fmt.Errorf("storeID required: %w", domain.ErrInvalidArgument)
 	}
-	if cmd.ProductID == uuid.Nil {
+	if cmd.ProductID == uuid.Nil() {
 		return fmt.Errorf("productID required: %w", domain.ErrInvalidArgument)
 	}
 	if cmd.MinQuantity < 0 {

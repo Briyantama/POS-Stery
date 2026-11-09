@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // Customer is the core aggregate for the customer bounded context.

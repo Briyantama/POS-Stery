@@ -8,7 +8,7 @@ import (
 
 	"github.com/Briyantama/POS-Stery/services/inventory/domain"
 	"github.com/Briyantama/stery-kit/go/events"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // Event types published to the pos:events stream.
@@ -50,7 +50,7 @@ func (p *EventPublisher) publish(ctx context.Context, eventType, tenantID string
 		return fmt.Errorf("marshal %s: %w", eventType, err)
 	}
 	if err := p.pub.Publish(ctx, events.Envelope{
-		EventID:       uuid.NewString(),
+		EventID:       uuid.NewV7().String(),
 		EventType:     eventType,
 		SchemaVersion: envelopeSchemaVer,
 		TenantID:      tenantID,

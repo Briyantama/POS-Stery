@@ -7,7 +7,7 @@ import (
 
 	"github.com/Briyantama/POS-Stery/services/customer/application/commands"
 	"github.com/Briyantama/POS-Stery/services/customer/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // ── stubs ──────────────────────────────────────────────────────────────────────
@@ -51,8 +51,8 @@ func (r *stubLoyaltyRepo) GetTotalPoints(_ context.Context, _, _ uuid.UUID) (int
 
 func existingCustomer() *domain.Customer {
 	return &domain.Customer{
-		ID:       uuid.New(),
-		TenantID: uuid.New(),
+		ID:       uuid.NewV7(),
+		TenantID: uuid.NewV7(),
 		Name:     "Loyal Customer",
 		IsActive: true,
 	}
@@ -62,7 +62,7 @@ func validLoyaltyCmd(c *domain.Customer, points int) commands.AddLoyaltyPointsCo
 	return commands.AddLoyaltyPointsCommand{
 		TenantID:   c.TenantID,
 		CustomerID: c.ID,
-		SaleID:     uuid.New(),
+		SaleID:     uuid.NewV7(),
 		Points:     points,
 	}
 }
@@ -110,9 +110,9 @@ func TestAddLoyaltyPoints_InactiveCustomer(t *testing.T) {
 func TestAddLoyaltyPoints_CustomerNotFound(t *testing.T) {
 	repo := &stubFindCustomerRepo{findErr: domain.ErrNotFound}
 	cmd := commands.AddLoyaltyPointsCommand{
-		TenantID:   uuid.New(),
-		CustomerID: uuid.New(),
-		SaleID:     uuid.New(),
+		TenantID:   uuid.NewV7(),
+		CustomerID: uuid.NewV7(),
+		SaleID:     uuid.NewV7(),
 		Points:     100,
 	}
 

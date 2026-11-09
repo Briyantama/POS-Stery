@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"uuid"
 
 	"github.com/Briyantama/POS-Stery/services/auth/application"
 	"github.com/Briyantama/POS-Stery/services/auth/application/commands"
@@ -57,7 +57,7 @@ func (s *stubSigner) Issue(claims application.TokenClaims) (string, time.Time, e
 }
 
 func (s *stubSigner) Verify(_ string) (*application.TokenClaims, error) {
-	return &application.TokenClaims{JTI: uuid.New().String()}, nil
+	return &application.TokenClaims{JTI: uuid.NewV4().String()}, nil
 }
 func (s *stubSigner) Blacklist(_ context.Context, _ string, _ time.Time) error { return nil }
 
@@ -72,29 +72,29 @@ func hashPassword(t *testing.T, pw string) string {
 	return string(hash)
 }
 
-func validTenant() string { return uuid.New().String() }
+func validTenant() string { return uuid.NewV7().String() }
 
 func adminUser(t *testing.T) *domain.User {
 	t.Helper()
 	return &domain.User{
-		ID:           uuid.New(),
-		TenantID:     uuid.New(),
+		ID:           uuid.NewV7(),
+		TenantID:     uuid.NewV7(),
 		Email:        "admin@example.com",
 		PasswordHash: hashPassword(t, "secret"),
 		IsActive:     true,
-		Roles:        []domain.UserRole{{RoleID: uuid.New(), Role: "admin", StoreID: nil}},
+		Roles:        []domain.UserRole{{RoleID: uuid.NewV7(), Role: "admin", StoreID: nil}},
 	}
 }
 
 func cashierUser(t *testing.T, storeID uuid.UUID) *domain.User {
 	t.Helper()
 	return &domain.User{
-		ID:           uuid.New(),
-		TenantID:     uuid.New(),
+		ID:           uuid.NewV7(),
+		TenantID:     uuid.NewV7(),
 		Email:        "cashier@example.com",
 		PasswordHash: hashPassword(t, "secret"),
 		IsActive:     true,
-		Roles:        []domain.UserRole{{RoleID: uuid.New(), Role: "cashier", StoreID: &storeID}},
+		Roles:        []domain.UserRole{{RoleID: uuid.NewV7(), Role: "cashier", StoreID: &storeID}},
 	}
 }
 
@@ -199,7 +199,7 @@ func TestLoginHandler_InactiveUser(t *testing.T) {
 }
 
 func TestLoginHandler_CashierMissingStoreID(t *testing.T) {
-	storeID := uuid.New()
+	storeID := uuid.NewV7()
 	user := cashierUser(t, storeID)
 	h := newLoginHandler(&stubUserRepo{user: user}, &stubStoreRepo{}, &stubSigner{})
 
@@ -215,7 +215,7 @@ func TestLoginHandler_CashierMissingStoreID(t *testing.T) {
 }
 
 func TestLoginHandler_CashierWrongStore(t *testing.T) {
-	storeID := uuid.New()
+	storeID := uuid.NewV7()
 	user := cashierUser(t, storeID)
 	h := newLoginHandler(&stubUserRepo{user: user}, &stubStoreRepo{}, &stubSigner{})
 
@@ -223,7 +223,7 @@ func TestLoginHandler_CashierWrongStore(t *testing.T) {
 		TenantID: validTenant(),
 		Email:    user.Email,
 		Password: "secret",
-		StoreID:  uuid.New().String(), // different store
+		StoreID:  uuid.NewV7().String(), // different store
 	})
 	if !errors.Is(err, domain.ErrPermissionDenied) {
 		t.Fatalf("want ErrPermissionDenied, got %v", err)
@@ -231,7 +231,7 @@ func TestLoginHandler_CashierWrongStore(t *testing.T) {
 }
 
 func TestLoginHandler_CashierWithoutAssignedStoreRejected(t *testing.T) {
-	user := cashierUser(t, uuid.New())
+	user := cashierUser(t, uuid.NewV7())
 	user.Roles[0].StoreID = nil // role carries no store
 	h := newLoginHandler(&stubUserRepo{user: user}, &stubStoreRepo{}, &stubSigner{})
 
@@ -239,7 +239,7 @@ func TestLoginHandler_CashierWithoutAssignedStoreRejected(t *testing.T) {
 		TenantID: validTenant(),
 		Email:    user.Email,
 		Password: "secret",
-		StoreID:  uuid.New().String(), // attacker-chosen
+		StoreID:  uuid.NewV7().String(), // attacker-chosen
 	})
 	if !errors.Is(err, domain.ErrPermissionDenied) {
 		t.Fatalf("want ErrPermissionDenied, got %v", err)
@@ -274,7 +274,7 @@ func TestLoginHandler_AdminSuccess(t *testing.T) {
 }
 
 func TestLoginHandler_CashierSuccess(t *testing.T) {
-	storeID := uuid.New()
+	storeID := uuid.NewV7()
 	user := cashierUser(t, storeID)
 	signer := &stubSigner{}
 	h := newLoginHandler(&stubUserRepo{user: user}, &stubStoreRepo{}, signer)

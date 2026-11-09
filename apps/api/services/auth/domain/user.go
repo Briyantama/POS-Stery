@@ -3,7 +3,7 @@ package domain
 import (
 	"time"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 type UserID = uuid.UUID

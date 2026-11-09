@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
+	"uuid"
 
 	"github.com/Briyantama/POS-Stery/services/auth/application"
 	"github.com/Briyantama/POS-Stery/services/auth/application/commands"
@@ -150,7 +150,7 @@ func (s *stubSignerWithClaims) Issue(claims application.TokenClaims) (string, ti
 
 func (s *stubSignerWithClaims) Verify(_ string) (*application.TokenClaims, error) {
 	return &application.TokenClaims{
-		JTI:      uuid.New().String(),
+		JTI:      uuid.NewV4().String(),
 		UserID:   s.userID,
 		TenantID: s.tenantID,
 		Role:     "admin",
@@ -170,10 +170,10 @@ func testHash(raw string) string {
 func makeActiveRefreshToken(userID, tenantID uuid.UUID) (raw string, rt *domain.RefreshToken) {
 	raw = "test-refresh-token-raw-value-abc"
 	rt = &domain.RefreshToken{
-		ID:        uuid.New(),
+		ID:        uuid.NewV7(),
 		UserID:    userID,
 		TenantID:  tenantID,
-		FamilyID:  uuid.New(),
+		FamilyID:  uuid.NewV7(),
 		TokenHash: testHash(raw),
 		IssuedAt:  time.Now().UTC(),
 		ExpiresAt: time.Now().UTC().Add(domain.RefreshTokenTTL),

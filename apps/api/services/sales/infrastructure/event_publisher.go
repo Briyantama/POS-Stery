@@ -8,7 +8,7 @@ import (
 
 	"github.com/Briyantama/POS-Stery/services/sales/domain"
 	"github.com/Briyantama/stery-kit/go/events"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // SaleCompletedEventType is the stream `type` of the Sale.Completed event.
@@ -37,7 +37,7 @@ func (p *EventPublisher) PublishSaleCompleted(ctx context.Context, sale *domain.
 		return fmt.Errorf("marshal Sale.Completed: %w", err)
 	}
 	if err := p.pub.Publish(ctx, events.Envelope{
-		EventID:       uuid.NewString(),
+		EventID:       uuid.NewV7().String(),
 		EventType:     SaleCompletedEventType,
 		SchemaVersion: 1,
 		TenantID:      sale.TenantID.String(),

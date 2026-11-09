@@ -8,7 +8,7 @@ import (
 	invcommands "github.com/Briyantama/POS-Stery/services/inventory/application/commands"
 	invdomain "github.com/Briyantama/POS-Stery/services/inventory/domain"
 	"github.com/Briyantama/POS-Stery/services/sales/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // InventoryPort implements application.InventoryUpdater by calling the inventory

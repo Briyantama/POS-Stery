@@ -7,7 +7,7 @@ import (
 
 	"github.com/Briyantama/POS-Stery/services/supplier/application"
 	"github.com/Briyantama/POS-Stery/services/supplier/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // ReceivedLineItem describes how many units of a product were physically received.
@@ -44,13 +44,13 @@ func NewReceiveStockHandler(
 // transaction and refuses an order that is not PENDING, so a receipt cannot be applied twice.
 // An Inventory.Replenished event is published after commit for each applied line.
 func (h *ReceiveStockHandler) Handle(ctx context.Context, cmd ReceiveStockCommand) (*domain.PurchaseOrder, error) {
-	if cmd.TenantID == uuid.Nil {
+	if cmd.TenantID == uuid.Nil() {
 		return nil, fmt.Errorf("tenantID required: %w", domain.ErrInvalidArgument)
 	}
-	if cmd.StoreID == uuid.Nil {
+	if cmd.StoreID == uuid.Nil() {
 		return nil, fmt.Errorf("storeID required: %w", domain.ErrInvalidArgument)
 	}
-	if cmd.PurchaseOrderID == uuid.Nil {
+	if cmd.PurchaseOrderID == uuid.Nil() {
 		return nil, fmt.Errorf("purchaseOrderID required: %w", domain.ErrInvalidArgument)
 	}
 	if len(cmd.ItemsReceived) == 0 {
@@ -61,7 +61,7 @@ func (h *ReceiveStockHandler) Handle(ctx context.Context, cmd ReceiveStockComman
 	lines := make([]domain.ReceivedLine, 0, len(cmd.ItemsReceived))
 	index := make(map[uuid.UUID]int, len(cmd.ItemsReceived))
 	for _, line := range cmd.ItemsReceived {
-		if line.ProductID == uuid.Nil {
+		if line.ProductID == uuid.Nil() {
 			return nil, fmt.Errorf("received item product_id required: %w", domain.ErrInvalidArgument)
 		}
 		if line.QuantityReceived <= 0 {

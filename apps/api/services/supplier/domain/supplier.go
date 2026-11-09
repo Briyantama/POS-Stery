@@ -3,7 +3,7 @@ package domain
 import (
 	"time"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // PurchaseOrderStatus represents the lifecycle state of a purchase order.

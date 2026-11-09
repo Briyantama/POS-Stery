@@ -12,7 +12,7 @@ import (
 	"github.com/Briyantama/POS-Stery/services/auth/infrastructure/redisstore"
 	"github.com/Briyantama/stery-kit/go/authn"
 	"github.com/Briyantama/stery-kit/go/httpx"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // Build wires the repositories, command handlers and HTTP handler.

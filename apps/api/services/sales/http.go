@@ -12,7 +12,7 @@ import (
 	"github.com/Briyantama/POS-Stery/services/sales/domain"
 	"github.com/Briyantama/stery-kit/go/authn"
 	"github.com/Briyantama/stery-kit/go/httpx"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 const maxBody = 1 << 20
@@ -243,7 +243,7 @@ func parseScope(w http.ResponseWriter, c authn.Claims) (tenantID, storeID uuid.U
 	storeID, err2 := uuid.Parse(c.StoreID)
 	if err1 != nil || err2 != nil {
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized")
-		return uuid.Nil, uuid.Nil, false
+		return uuid.Nil(), uuid.Nil(), false
 	}
 	return tenantID, storeID, true
 }

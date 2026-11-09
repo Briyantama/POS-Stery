@@ -7,9 +7,9 @@ import (
 
 	"github.com/Briyantama/POS-Stery/services/supplier/domain"
 	"github.com/Briyantama/stery-kit/go/pgtenant"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"uuid"
 )
 
 // PurchaseOrderRepository implements domain.PurchaseOrderRepository using PostgreSQL.
@@ -77,30 +77,7 @@ func (r *PurchaseOrderRepository) Get(ctx context.Context, tenantID, storeID, or
 		}
 		order.Status = domain.PurchaseOrderStatus(statusStr)
 
-		// Load line items.
-		rows, err := tx.Query(ctx, `
-			SELECT id, tenant_id, purchase_order_id, product_id,
-			       quantity_ordered, quantity_received, unit_cost
-			FROM supplier.purchase_order_items
-			WHERE tenant_id = $1 AND purchase_order_id = $2
-			ORDER BY id
-		`, tenantID, orderID)
-		if err != nil {
-			return fmt.Errorf("list order items: %w", err)
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			item := &domain.PurchaseOrderItem{}
-			if err := rows.Scan(
-				&item.ID, &item.TenantID, &item.PurchaseOrderID, &item.ProductID,
-				&item.QuantityOrdered, &item.QuantityReceived, &item.UnitCost,
-			); err != nil {
-				return fmt.Errorf("scan order item: %w", err)
-			}
-			order.Items = append(order.Items, item)
-		}
-		if err := rows.Err(); err != nil {
+		if err := loadOrderItems(ctx, tx, order); err != nil {
 			return err
 		}
 
@@ -109,6 +86,33 @@ func (r *PurchaseOrderRepository) Get(ctx context.Context, tenantID, storeID, or
 	})
 
 	return result, err
+}
+
+// loadOrderItems fills order.Items with the order's line items.
+func loadOrderItems(ctx context.Context, tx pgx.Tx, order *domain.PurchaseOrder) error {
+	rows, err := tx.Query(ctx, `
+		SELECT id, tenant_id, purchase_order_id, product_id,
+		       quantity_ordered, quantity_received, unit_cost
+		FROM supplier.purchase_order_items
+		WHERE tenant_id = $1 AND purchase_order_id = $2
+		ORDER BY id
+	`, order.TenantID, order.ID)
+	if err != nil {
+		return fmt.Errorf("list order items: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		item := &domain.PurchaseOrderItem{}
+		if err := rows.Scan(
+			&item.ID, &item.TenantID, &item.PurchaseOrderID, &item.ProductID,
+			&item.QuantityOrdered, &item.QuantityReceived, &item.UnitCost,
+		); err != nil {
+			return fmt.Errorf("scan order item: %w", err)
+		}
+		order.Items = append(order.Items, item)
+	}
+	return rows.Err()
 }
 
 // List returns a paginated list of purchase orders, optionally filtered by status.
@@ -168,8 +172,9 @@ func (r *PurchaseOrderRepository) List(
 	return orders, total, err
 }
 
-// ReceiveOrder books a goods receipt in one transaction. The order row is locked FOR UPDATE and
-// must be PENDING, so concurrent or repeated receipts of the same order cannot both apply.
+// ReceiveOrder books a goods receipt in one transaction. A single UPDATE ... RETURNING OLD.status
+// moves the order to RECEIVED, row-locks it, and proves it was PENDING, so concurrent or repeated
+// receipts of the same order cannot both apply. The returned order is read in the same transaction.
 // Stock is written to inventory.stock_items in the same transaction (same tenant/store RLS
 // context) so the receipt and the stock increment commit or roll back together.
 func (r *PurchaseOrderRepository) ReceiveOrder(
@@ -178,22 +183,31 @@ func (r *PurchaseOrderRepository) ReceiveOrder(
 	lines []domain.ReceivedLine,
 ) (*domain.PurchaseOrder, []domain.ReceivedLine, error) {
 	var applied []domain.ReceivedLine
+	order := &domain.PurchaseOrder{}
 
 	err := pgtenant.WithTenantTx(ctx, r.pool, tenantID.String(), storeID.String(), func(tx pgx.Tx) error {
-		var status string
+		// One UPDATE both locks the order row (as FOR UPDATE did) and returns the status it held before,
+		// so a concurrent or repeated receipt waits, re-reads the committed row and sees RECEIVED.
+		// A non-PENDING order returns ErrConflict below, which rolls this UPDATE back.
+		var oldStatus string
 		if err := tx.QueryRow(ctx, `
-			SELECT status FROM supplier.purchase_orders
-			WHERE tenant_id = $1 AND store_id = $2 AND id = $3
-			FOR UPDATE
-		`, tenantID, storeID, orderID).Scan(&status); err != nil {
+			UPDATE supplier.purchase_orders
+			SET status = $1, updated_at = NOW()
+			WHERE tenant_id = $2 AND store_id = $3 AND id = $4
+			RETURNING OLD.status, NEW.supplier_id, NEW.notes, NEW.created_at, NEW.updated_at
+		`, string(domain.StatusReceived), tenantID, storeID, orderID).Scan(
+			&oldStatus, &order.SupplierID, &order.Notes, &order.CreatedAt, &order.UpdatedAt,
+		); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return fmt.Errorf("purchase order: %w", domain.ErrNotFound)
 			}
 			return fmt.Errorf("lock purchase order: %w", err)
 		}
-		if domain.PurchaseOrderStatus(status) != domain.StatusPending {
-			return fmt.Errorf("order is %s, only PENDING orders can be received: %w", status, domain.ErrConflict)
+		if domain.PurchaseOrderStatus(oldStatus) != domain.StatusPending {
+			return fmt.Errorf("order is %s, only PENDING orders can be received: %w", oldStatus, domain.ErrConflict)
 		}
+		order.ID, order.TenantID, order.StoreID = orderID, tenantID, storeID
+		order.Status = domain.StatusReceived
 
 		for _, line := range lines {
 			tag, err := tx.Exec(ctx, `
@@ -222,20 +236,8 @@ func (r *PurchaseOrderRepository) ReceiveOrder(
 			applied = append(applied, line)
 		}
 
-		if _, err := tx.Exec(ctx, `
-			UPDATE supplier.purchase_orders
-			SET status = $1, updated_at = NOW()
-			WHERE tenant_id = $2 AND id = $3
-		`, string(domain.StatusReceived), tenantID, orderID); err != nil {
-			return fmt.Errorf("update order status: %w", err)
-		}
-		return nil
+		return loadOrderItems(ctx, tx, order)
 	})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	order, err := r.Get(ctx, tenantID, storeID, orderID)
 	if err != nil {
 		return nil, nil, err
 	}

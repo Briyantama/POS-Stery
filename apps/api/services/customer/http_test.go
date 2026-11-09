@@ -13,10 +13,10 @@ import (
 	"github.com/Briyantama/POS-Stery/services/customer/application/commands"
 	"github.com/Briyantama/POS-Stery/services/customer/domain"
 	"github.com/Briyantama/stery-kit/go/authn"
-	"github.com/google/uuid"
+	"uuid"
 )
 
-var tenantA = uuid.New()
+var tenantA = uuid.NewV7()
 
 type stubVerifier struct{}
 
@@ -35,7 +35,7 @@ func (stubVerifier) Verify(_ context.Context, tok string) (authn.Claims, error) 
 type stub struct{ err error }
 
 func (s stub) cust(tenant uuid.UUID) *domain.Customer {
-	return &domain.Customer{ID: uuid.New(), TenantID: tenant, Name: "Jane", IsActive: true}
+	return &domain.Customer{ID: uuid.NewV7(), TenantID: tenant, Name: "Jane", IsActive: true}
 }
 
 func (s stub) Handle(_ context.Context, cmd commands.CreateCustomerCommand) (*domain.Customer, error) {
@@ -100,7 +100,7 @@ func TestAuth(t *testing.T) {
 
 func TestEnvelopeAndTenantFromClaim(t *testing.T) {
 	// A body-supplied tenant_id is rejected (unknown field), so it can never override the claim.
-	if rec := do(newMux(nil), "POST", "/api/v1/customers", "admin", `{"name":"Jane","tenant_id":"`+uuid.New().String()+`"}`); rec.Code != 400 {
+	if rec := do(newMux(nil), "POST", "/api/v1/customers", "admin", `{"name":"Jane","tenant_id":"`+uuid.NewV7().String()+`"}`); rec.Code != 400 {
 		t.Fatalf("body tenant_id not rejected: %d", rec.Code)
 	}
 	rec := do(newMux(nil), "POST", "/api/v1/customers", "admin", `{"name":"Jane"}`)
@@ -123,8 +123,8 @@ func TestEnvelopeAndTenantFromClaim(t *testing.T) {
 }
 
 func TestStatusTable(t *testing.T) {
-	id := uuid.New().String()
-	loy := `{"sale_id":"` + uuid.New().String() + `","points":10}`
+	id := uuid.NewV7().String()
+	loy := `{"sale_id":"` + uuid.NewV7().String() + `","points":10}`
 	rows := []struct {
 		name, method, path, body string
 		err                      error
@@ -156,8 +156,8 @@ func TestStatusTable(t *testing.T) {
 }
 
 func TestLoyaltyAdminOnly(t *testing.T) {
-	path := "/api/v1/customers/" + uuid.New().String() + "/loyalty"
-	body := `{"sale_id":"` + uuid.New().String() + `","points":1000000}`
+	path := "/api/v1/customers/" + uuid.NewV7().String() + "/loyalty"
+	body := `{"sale_id":"` + uuid.NewV7().String() + `","points":1000000}`
 	if got := do(newMux(nil), "POST", path, "cashier", body).Code; got != 403 {
 		t.Fatalf("cashier minted points: %d", got)
 	}

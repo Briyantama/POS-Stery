@@ -3,7 +3,7 @@ package domain
 import (
 	"context"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // SaleRepository persists and retrieves sales data.

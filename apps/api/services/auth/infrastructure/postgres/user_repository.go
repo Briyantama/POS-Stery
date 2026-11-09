@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"uuid"
 
 	"github.com/Briyantama/POS-Stery/services/auth/domain"
 	"github.com/Briyantama/POS-Stery/services/auth/infrastructure/postgres/db"
@@ -85,10 +85,10 @@ func (r *UserRepository) ResolveTenantByEmail(ctx context.Context, email string)
 	const q = `SELECT COALESCE(auth.resolve_login_tenant($1), '00000000-0000-0000-0000-000000000000'::uuid)`
 	var tenantID uuid.UUID
 	if err := r.pool.QueryRow(ctx, q, email).Scan(&tenantID); err != nil {
-		return uuid.Nil, fmt.Errorf("resolve login tenant: %w", err)
+		return uuid.Nil(), fmt.Errorf("resolve login tenant: %w", err)
 	}
-	if tenantID == uuid.Nil {
-		return uuid.Nil, domain.ErrNotFound
+	if tenantID == uuid.Nil() {
+		return uuid.Nil(), domain.ErrNotFound
 	}
 	return tenantID, nil
 }

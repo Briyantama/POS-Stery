@@ -14,13 +14,13 @@ import (
 	"github.com/Briyantama/POS-Stery/services/inventory/application/queries"
 	"github.com/Briyantama/POS-Stery/services/inventory/domain"
 	"github.com/Briyantama/stery-kit/go/authn"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 var (
-	tenantID = uuid.NewString()
-	storeID  = uuid.NewString()
-	prodID   = uuid.NewString()
+	tenantID = uuid.NewV7().String()
+	storeID  = uuid.NewV7().String()
+	prodID   = uuid.NewV7().String()
 )
 
 type stubVerifier struct{}
@@ -43,7 +43,7 @@ type stub struct {
 }
 
 func (s *stub) item() *domain.StockItem {
-	return &domain.StockItem{ID: uuid.New(), TenantID: uuid.MustParse(tenantID), StoreID: uuid.MustParse(storeID), ProductID: uuid.MustParse(prodID), Quantity: 7}
+	return &domain.StockItem{ID: uuid.NewV7(), TenantID: uuid.MustParse(tenantID), StoreID: uuid.MustParse(storeID), ProductID: uuid.MustParse(prodID), Quantity: 7}
 }
 
 func (s *stub) addOrGet(t uuid.UUID, p uuid.UUID) (*domain.StockItem, error) {
@@ -99,7 +99,7 @@ type lowListStub struct{}
 func (lowListStub) Handle(context.Context, queries.ListItemsQuery) (queries.ListItemsResult, error) {
 	min := int64(10)
 	mk := func(name string, min *int64, low bool) *domain.StockItem {
-		return &domain.StockItem{ID: uuid.New(), TenantID: uuid.MustParse(tenantID), StoreID: uuid.MustParse(storeID), ProductID: uuid.New(), Quantity: 7, ProductName: name, MinQuantity: min, IsLowStock: low}
+		return &domain.StockItem{ID: uuid.NewV7(), TenantID: uuid.MustParse(tenantID), StoreID: uuid.MustParse(storeID), ProductID: uuid.NewV7(), Quantity: 7, ProductName: name, MinQuantity: min, IsLowStock: low}
 	}
 	return queries.ListItemsResult{Items: []*domain.StockItem{mk("Tea", &min, true), mk("Cup", nil, false)}, Total: 2}, nil
 }
@@ -151,7 +151,7 @@ func TestAuth(t *testing.T) {
 
 func TestEnvelopeAndTenantFromClaim(t *testing.T) {
 	s := &stub{}
-	body := `{"product_id":"` + prodID + `","quantity":5,"tenant_id":"` + uuid.NewString() + `"}`
+	body := `{"product_id":"` + prodID + `","quantity":5,"tenant_id":"` + uuid.NewV7().String() + `"}`
 	rec := do(newMux(s), "POST", "/api/v1/inventory", "admin", body)
 	// tenant_id is not a field of the body struct, so DecodeJSON rejects it; send without it for the claim check.
 	if rec.Code != 400 {

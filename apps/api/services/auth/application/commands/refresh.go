@@ -11,7 +11,7 @@ import (
 
 	"github.com/Briyantama/POS-Stery/services/auth/application"
 	"github.com/Briyantama/POS-Stery/services/auth/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 type RefreshCommand struct {
@@ -98,7 +98,7 @@ func (h *RefreshHandler) Handle(ctx context.Context, cmd RefreshCommand) (*Refre
 		return nil, fmt.Errorf("generate refresh token: %w", err)
 	}
 
-	newRTID := uuid.New()
+	newRTID := uuid.NewV7()
 	now := time.Now().UTC()
 	newRT := &domain.RefreshToken{
 		ID:        newRTID,

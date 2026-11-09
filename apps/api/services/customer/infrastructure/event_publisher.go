@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/Briyantama/stery-kit/go/events"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // SubjectCustomerNew is the event type of a newly created customer.
@@ -37,7 +37,7 @@ func (p *EventPublisher) PublishCustomerNew(ctx context.Context, customerID, ten
 		return fmt.Errorf("marshal customer new: %w", err)
 	}
 	if err := p.pub.Publish(ctx, events.Envelope{
-		EventID:       uuid.NewString(),
+		EventID:       uuid.NewV7().String(),
 		EventType:     SubjectCustomerNew,
 		SchemaVersion: 1,
 		TenantID:      tenantID,

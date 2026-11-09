@@ -67,7 +67,7 @@ func run(ctx context.Context, getenv func(string) string) error {
 	if err != nil {
 		return err
 	}
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	handlers, err := build(cfg, pool, rdb)
 	if err != nil {

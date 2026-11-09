@@ -9,7 +9,7 @@ import (
 
 	"github.com/Briyantama/POS-Stery/services/customer/application"
 	"github.com/Briyantama/POS-Stery/services/customer/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // CreateCustomerCommand carries the data required to create a new customer.
@@ -34,7 +34,7 @@ func NewCreateCustomerHandler(repo domain.CustomerRepository, publisher applicat
 
 // Handle validates the command, persists the customer and publishes Customer.New.
 func (h *CreateCustomerHandler) Handle(ctx context.Context, cmd CreateCustomerCommand) (*domain.Customer, error) {
-	if cmd.TenantID == uuid.Nil {
+	if cmd.TenantID == uuid.Nil() {
 		return nil, fmt.Errorf("tenant_id is required: %w", domain.ErrInvalidArgument)
 	}
 	cmd.Name, cmd.Phone, cmd.Email = strings.TrimSpace(cmd.Name), strings.TrimSpace(cmd.Phone), strings.TrimSpace(cmd.Email)
@@ -51,7 +51,7 @@ func (h *CreateCustomerHandler) Handle(ctx context.Context, cmd CreateCustomerCo
 	}
 
 	c := &domain.Customer{
-		ID:       uuid.New(),
+		ID:       uuid.NewV7(),
 		TenantID: cmd.TenantID,
 		Name:     cmd.Name,
 		Phone:    cmd.Phone,

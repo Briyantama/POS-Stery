@@ -7,9 +7,9 @@ import (
 
 	"github.com/Briyantama/POS-Stery/services/sales/domain"
 	"github.com/Briyantama/stery-kit/go/pgtenant"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"uuid"
 )
 
 // SaleRepository is the PostgreSQL implementation of domain.SaleRepository.
@@ -175,13 +175,15 @@ func (r *SaleRepository) GetReport(ctx context.Context, tenantID, storeID *uuid.
 	var report domain.SalesReport
 
 	err := pgtenant.WithTenantTx(ctx, r.pool, tenantID.String(), storeCtx, func(tx pgx.Tx) error {
+		// The explicit ::timestamptz casts match what timestamptz-vs-date comparison does implicitly, but
+		// let idx_sales_completed_at serve the range (the cross-type operators are not btree-indexable).
 		row := tx.QueryRow(ctx,
 			`SELECT COUNT(*),
 			        COALESCE(SUM(total), 0)
 			 FROM sales.sales
 			 WHERE tenant_id = $1
 			   AND ($2::uuid IS NULL OR store_id = $2::uuid)
-			   AND completed_at >= $3::date AND completed_at < $3::date + 1`,
+			   AND completed_at >= $3::date::timestamptz AND completed_at < ($3::date + 1)::timestamptz`,
 			tenantID, storeID, date,
 		)
 
@@ -203,7 +205,7 @@ func (r *SaleRepository) GetReport(ctx context.Context, tenantID, storeID *uuid.
 			 JOIN sales.sales s ON s.id = si.sale_id
 			 WHERE s.tenant_id = $1
 			   AND ($2::uuid IS NULL OR s.store_id = $2::uuid)
-			   AND s.completed_at >= $3::date AND s.completed_at < $3::date + 1
+			   AND s.completed_at >= $3::date::timestamptz AND s.completed_at < ($3::date + 1)::timestamptz
 			 GROUP BY si.product_id
 			 ORDER BY SUM(si.quantity) DESC
 			 LIMIT 10`,

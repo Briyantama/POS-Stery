@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"uuid"
 
 	"github.com/Briyantama/POS-Stery/internal/testdb"
 	"github.com/Briyantama/POS-Stery/services/supplier/domain"
@@ -32,8 +32,8 @@ func newFixture(t *testing.T, products, noStock []uuid.UUID) *fixture {
 	}
 	t.Cleanup(pool.Close)
 
-	f := &fixture{pool: pool, repo: postgres.NewPurchaseOrderRepository(pool), tenant: uuid.New(), store: uuid.New(), order: uuid.New()}
-	supplier := uuid.New()
+	f := &fixture{pool: pool, repo: postgres.NewPurchaseOrderRepository(pool), tenant: uuid.NewV7(), store: uuid.NewV7(), order: uuid.NewV7()}
+	supplier := uuid.NewV7()
 	mustExec(t, pool, `INSERT INTO supplier.suppliers (id, tenant_id, name) VALUES ($1, $2, 'acme')`, supplier, f.tenant)
 	mustExec(t, pool, `INSERT INTO supplier.purchase_orders (id, tenant_id, store_id, supplier_id, notes) VALUES ($1, $2, $3, $4, '')`, f.order, f.tenant, f.store, supplier)
 	for _, p := range append(append([]uuid.UUID{}, products...), noStock...) {
@@ -78,7 +78,7 @@ func (f *fixture) receive(lines ...domain.ReceivedLine) (*domain.PurchaseOrder, 
 }
 
 func TestReceiveOrder_IncrementsStockRelativelyAndMarksReceived(t *testing.T) {
-	p := uuid.New()
+	p := uuid.NewV7()
 	f := newFixture(t, []uuid.UUID{p}, nil)
 
 	order, applied, err := f.receive(domain.ReceivedLine{ProductID: p, Quantity: 5})
@@ -94,7 +94,7 @@ func TestReceiveOrder_IncrementsStockRelativelyAndMarksReceived(t *testing.T) {
 }
 
 func TestReceiveOrder_SecondReceiptConflictsAndDoesNotDoubleCount(t *testing.T) {
-	p := uuid.New()
+	p := uuid.NewV7()
 	f := newFixture(t, []uuid.UUID{p}, nil)
 	line := domain.ReceivedLine{ProductID: p, Quantity: 5}
 
@@ -110,18 +110,16 @@ func TestReceiveOrder_SecondReceiptConflictsAndDoesNotDoubleCount(t *testing.T) 
 }
 
 func TestReceiveOrder_ConcurrentReceiptsApplyOnce(t *testing.T) {
-	p := uuid.New()
+	p := uuid.NewV7()
 	f := newFixture(t, []uuid.UUID{p}, nil)
 
 	const n = 8
 	var wg sync.WaitGroup
 	errs := make([]error, n)
 	for i := range n {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			_, _, errs[i] = f.receive(domain.ReceivedLine{ProductID: p, Quantity: 5})
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -144,7 +142,7 @@ func TestReceiveOrder_ConcurrentReceiptsApplyOnce(t *testing.T) {
 
 // A failure on a later line must roll back earlier lines: stock, quantity_received and status.
 func TestReceiveOrder_FailureRollsBackEverything(t *testing.T) {
-	withStock, withoutStock := uuid.New(), uuid.New()
+	withStock, withoutStock := uuid.NewV7(), uuid.NewV7()
 	f := newFixture(t, []uuid.UUID{withStock}, []uuid.UUID{withoutStock})
 
 	_, _, err := f.receive(
@@ -168,7 +166,7 @@ func TestReceiveOrder_FailureRollsBackEverything(t *testing.T) {
 }
 
 func TestReceiveOrder_CancelledOrderConflicts(t *testing.T) {
-	p := uuid.New()
+	p := uuid.NewV7()
 	f := newFixture(t, []uuid.UUID{p}, nil)
 	mustExec(t, f.pool, `UPDATE supplier.purchase_orders SET status = 'CANCELLED' WHERE id = $1`, f.order)
 
@@ -179,7 +177,7 @@ func TestReceiveOrder_CancelledOrderConflicts(t *testing.T) {
 
 func TestReceiveOrder_UnknownOrderNotFound(t *testing.T) {
 	f := newFixture(t, nil, nil)
-	_, _, err := f.repo.ReceiveOrder(context.Background(), f.tenant, f.store, uuid.New(), []domain.ReceivedLine{{ProductID: uuid.New(), Quantity: 1}})
+	_, _, err := f.repo.ReceiveOrder(context.Background(), f.tenant, f.store, uuid.NewV7(), []domain.ReceivedLine{{ProductID: uuid.NewV7(), Quantity: 1}})
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
 	}

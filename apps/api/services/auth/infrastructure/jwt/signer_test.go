@@ -35,13 +35,13 @@ func newTestSigner(t *testing.T) *jwt.RSASigner {
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(key),
 	})
-	privFile.Close()
+	_ = privFile.Close()
 
 	pubPath := filepath.Join(dir, "public.pem")
 	pubFile, _ := os.Create(pubPath)
 	pubDER, _ := x509.MarshalPKIXPublicKey(&key.PublicKey)
 	_ = pem.Encode(pubFile, &pem.Block{Type: "PUBLIC KEY", Bytes: pubDER})
-	pubFile.Close()
+	_ = pubFile.Close()
 
 	signer, err := jwt.NewRSASigner(privPath, pubPath, noOpBlacklist{})
 	if err != nil {

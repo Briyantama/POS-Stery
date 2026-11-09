@@ -15,7 +15,7 @@ import (
 	"github.com/Briyantama/POS-Stery/services/auth/application/commands"
 	"github.com/Briyantama/POS-Stery/services/auth/domain"
 	"github.com/Briyantama/stery-kit/go/authn"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 type stubVerifier struct{}
@@ -64,7 +64,7 @@ func (logoutAllStub) Handle(context.Context, commands.LogoutAllCommand) error { 
 type sessionsStub struct{}
 
 func (sessionsStub) Handle(context.Context, commands.ListSessionsQuery) (*commands.ListSessionsResult, error) {
-	return &commands.ListSessionsResult{Sessions: []commands.SessionInfo{{ID: uuid.New(), FamilyID: uuid.New()}}}, nil
+	return &commands.ListSessionsResult{Sessions: []commands.SessionInfo{{ID: uuid.NewV7(), FamilyID: uuid.NewV7()}}}, nil
 }
 
 type storesStub struct{}
@@ -104,7 +104,7 @@ func TestStoresList(t *testing.T) {
 type tenantVerifier struct{}
 
 func (tenantVerifier) Verify(context.Context, string) (authn.Claims, error) {
-	return authn.Claims{UserID: "u1", TenantID: uuid.NewString(), Roles: []string{"admin"}}, nil
+	return authn.Claims{UserID: "u1", TenantID: uuid.NewV7().String(), Roles: []string{"admin"}}, nil
 }
 
 func TestLoginStoreRequiredMessage(t *testing.T) {

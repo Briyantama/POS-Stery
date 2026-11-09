@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Briyantama/POS-Stery/services/supplier/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // PurchaseOrderLineItem is an individual product line within a purchase order.
@@ -43,13 +43,13 @@ func NewCreatePurchaseOrderHandler(
 
 // Handle executes the CreatePurchaseOrder use case.
 func (h *CreatePurchaseOrderHandler) Handle(ctx context.Context, cmd CreatePurchaseOrderCommand) (*domain.PurchaseOrder, error) {
-	if cmd.TenantID == uuid.Nil {
+	if cmd.TenantID == uuid.Nil() {
 		return nil, fmt.Errorf("tenantID required: %w", domain.ErrInvalidArgument)
 	}
-	if cmd.StoreID == uuid.Nil {
+	if cmd.StoreID == uuid.Nil() {
 		return nil, fmt.Errorf("storeID required: %w", domain.ErrInvalidArgument)
 	}
-	if cmd.SupplierID == uuid.Nil {
+	if cmd.SupplierID == uuid.Nil() {
 		return nil, fmt.Errorf("supplierID required: %w", domain.ErrInvalidArgument)
 	}
 	if len(cmd.Items) == 0 {
@@ -61,10 +61,10 @@ func (h *CreatePurchaseOrderHandler) Handle(ctx context.Context, cmd CreatePurch
 		return nil, fmt.Errorf("validate supplier: %w", err)
 	}
 
-	orderID := uuid.New()
+	orderID := uuid.NewV7()
 	items := make([]*domain.PurchaseOrderItem, 0, len(cmd.Items))
 	for _, line := range cmd.Items {
-		if line.ProductID == uuid.Nil {
+		if line.ProductID == uuid.Nil() {
 			return nil, fmt.Errorf("item product_id required: %w", domain.ErrInvalidArgument)
 		}
 		if line.QuantityOrdered <= 0 {

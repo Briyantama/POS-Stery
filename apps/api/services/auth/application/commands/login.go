@@ -10,8 +10,8 @@ import (
 
 	"github.com/Briyantama/POS-Stery/services/auth/application"
 	"github.com/Briyantama/POS-Stery/services/auth/domain"
-	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"uuid"
 )
 
 type LoginCommand struct {
@@ -110,10 +110,10 @@ func (h *LoginHandler) Handle(ctx context.Context, cmd LoginCommand) (*LoginResu
 
 	now := time.Now().UTC()
 	rt := &domain.RefreshToken{
-		ID:        uuid.New(),
+		ID:        uuid.NewV7(),
 		UserID:    user.ID,
 		TenantID:  user.TenantID,
-		FamilyID:  uuid.New(), // new family per login
+		FamilyID:  uuid.NewV7(), // new family per login
 		TokenHash: hashRefresh,
 		IssuedAt:  now,
 		ExpiresAt: now.Add(domain.RefreshTokenTTL),
@@ -141,14 +141,14 @@ func (h *LoginHandler) resolveTenantID(ctx context.Context, cmd LoginCommand) (u
 	if cmd.TenantID != "" {
 		parsed, err := uuid.Parse(cmd.TenantID)
 		if err != nil {
-			return uuid.Nil, fmt.Errorf("%w: invalid tenant_id", domain.ErrInvalidArgument)
+			return uuid.Nil(), fmt.Errorf("%w: invalid tenant_id", domain.ErrInvalidArgument)
 		}
 		return parsed, nil
 	}
 
 	tenantID, err := h.users.ResolveTenantByEmail(ctx, cmd.Email)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("%w: invalid credentials", domain.ErrUnauthenticated)
+		return uuid.Nil(), fmt.Errorf("%w: invalid credentials", domain.ErrUnauthenticated)
 	}
 	return tenantID, nil
 }

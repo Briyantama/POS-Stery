@@ -7,7 +7,7 @@ import (
 
 	"github.com/Briyantama/POS-Stery/services/supplier/application/commands"
 	"github.com/Briyantama/POS-Stery/services/supplier/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // ── stubs ──────────────────────────────────────────────────────────────────────
@@ -52,9 +52,9 @@ func (p *stubSupplierPublisher) PublishReplenished(_ context.Context, _, _, _, _
 
 func receiveCmd(items ...commands.ReceivedLineItem) commands.ReceiveStockCommand {
 	return commands.ReceiveStockCommand{
-		TenantID:        uuid.New(),
-		StoreID:         uuid.New(),
-		PurchaseOrderID: uuid.New(),
+		TenantID:        uuid.NewV7(),
+		StoreID:         uuid.NewV7(),
+		PurchaseOrderID: uuid.NewV7(),
 		ItemsReceived:   items,
 	}
 }
@@ -67,23 +67,23 @@ func line(productID uuid.UUID, qty int32) commands.ReceivedLineItem {
 
 func TestReceiveStock_InvalidArguments(t *testing.T) {
 	tests := map[string]func(*commands.ReceiveStockCommand){
-		"missing tenant": func(c *commands.ReceiveStockCommand) { c.TenantID = uuid.Nil },
-		"missing store":  func(c *commands.ReceiveStockCommand) { c.StoreID = uuid.Nil },
-		"missing order":  func(c *commands.ReceiveStockCommand) { c.PurchaseOrderID = uuid.Nil },
+		"missing tenant": func(c *commands.ReceiveStockCommand) { c.TenantID = uuid.Nil() },
+		"missing store":  func(c *commands.ReceiveStockCommand) { c.StoreID = uuid.Nil() },
+		"missing order":  func(c *commands.ReceiveStockCommand) { c.PurchaseOrderID = uuid.Nil() },
 		"no items":       func(c *commands.ReceiveStockCommand) { c.ItemsReceived = nil },
 		"nil product": func(c *commands.ReceiveStockCommand) {
-			c.ItemsReceived = []commands.ReceivedLineItem{line(uuid.Nil, 5)}
+			c.ItemsReceived = []commands.ReceivedLineItem{line(uuid.Nil(), 5)}
 		},
 		"zero quantity": func(c *commands.ReceiveStockCommand) {
-			c.ItemsReceived = []commands.ReceivedLineItem{line(uuid.New(), 0)}
+			c.ItemsReceived = []commands.ReceivedLineItem{line(uuid.NewV7(), 0)}
 		},
 		"negative quantity": func(c *commands.ReceiveStockCommand) {
-			c.ItemsReceived = []commands.ReceivedLineItem{line(uuid.New(), -1)}
+			c.ItemsReceived = []commands.ReceivedLineItem{line(uuid.NewV7(), -1)}
 		},
 	}
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {
-			cmd := receiveCmd(line(uuid.New(), 5))
+			cmd := receiveCmd(line(uuid.NewV7(), 5))
 			mutate(&cmd)
 			repo := &stubPORepo{}
 			_, err := commands.NewReceiveStockHandler(repo, &stubSupplierPublisher{}).Handle(context.Background(), cmd)
@@ -103,7 +103,7 @@ func TestReceiveStock_RepoConflict_NoEvents(t *testing.T) {
 	repo := &stubPORepo{receiveErr: domain.ErrConflict}
 	pub := &stubSupplierPublisher{}
 
-	_, err := commands.NewReceiveStockHandler(repo, pub).Handle(context.Background(), receiveCmd(line(uuid.New(), 5)))
+	_, err := commands.NewReceiveStockHandler(repo, pub).Handle(context.Background(), receiveCmd(line(uuid.NewV7(), 5)))
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("want ErrConflict, got %v", err)
 	}
@@ -117,7 +117,7 @@ func TestReceiveStock_RepoFails_NoEvents(t *testing.T) {
 	repo := &stubPORepo{receiveErr: domain.ErrNotFound}
 	pub := &stubSupplierPublisher{}
 
-	_, err := commands.NewReceiveStockHandler(repo, pub).Handle(context.Background(), receiveCmd(line(uuid.New(), 5)))
+	_, err := commands.NewReceiveStockHandler(repo, pub).Handle(context.Background(), receiveCmd(line(uuid.NewV7(), 5)))
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("want ErrNotFound, got %v", err)
 	}
@@ -127,8 +127,8 @@ func TestReceiveStock_RepoFails_NoEvents(t *testing.T) {
 }
 
 func TestReceiveStock_HappyPath(t *testing.T) {
-	productID := uuid.New()
-	order := &domain.PurchaseOrder{ID: uuid.New(), Status: domain.StatusReceived}
+	productID := uuid.NewV7()
+	order := &domain.PurchaseOrder{ID: uuid.NewV7(), Status: domain.StatusReceived}
 	repo := &stubPORepo{order: order, applied: []domain.ReceivedLine{{ProductID: productID, Quantity: 5}}}
 	pub := &stubSupplierPublisher{}
 
@@ -149,10 +149,10 @@ func TestReceiveStock_HappyPath(t *testing.T) {
 
 // Lines the repository skipped (product not on the order) must not produce events.
 func TestReceiveStock_ProductNotInOrder_NoEvent(t *testing.T) {
-	repo := &stubPORepo{order: &domain.PurchaseOrder{ID: uuid.New()}, applied: nil}
+	repo := &stubPORepo{order: &domain.PurchaseOrder{ID: uuid.NewV7()}, applied: nil}
 	pub := &stubSupplierPublisher{}
 
-	if _, err := commands.NewReceiveStockHandler(repo, pub).Handle(context.Background(), receiveCmd(line(uuid.New(), 3))); err != nil {
+	if _, err := commands.NewReceiveStockHandler(repo, pub).Handle(context.Background(), receiveCmd(line(uuid.NewV7(), 3))); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if pub.calls != 0 {
@@ -162,8 +162,8 @@ func TestReceiveStock_ProductNotInOrder_NoEvent(t *testing.T) {
 
 // Repeated lines for one product are merged so stock and quantity_received are booked once.
 func TestReceiveStock_DuplicateProductLinesMerged(t *testing.T) {
-	productID := uuid.New()
-	repo := &stubPORepo{order: &domain.PurchaseOrder{ID: uuid.New()}}
+	productID := uuid.NewV7()
+	repo := &stubPORepo{order: &domain.PurchaseOrder{ID: uuid.NewV7()}}
 
 	if _, err := commands.NewReceiveStockHandler(repo, &stubSupplierPublisher{}).Handle(context.Background(), receiveCmd(line(productID, 2), line(productID, 3))); err != nil {
 		t.Fatalf("unexpected error: %v", err)

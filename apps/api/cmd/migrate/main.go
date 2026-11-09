@@ -50,7 +50,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, out io.
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	pingCtx, cancel := context.WithTimeout(ctx, pingTimeout)
 	defer cancel()

@@ -8,7 +8,7 @@ import (
 
 	"github.com/Briyantama/POS-Stery/services/inventory/application"
 	"github.com/Briyantama/POS-Stery/services/inventory/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // UpdateStockCommand carries the data needed to adjust a product's stock level.
@@ -54,13 +54,13 @@ func NewUpdateStockHandler(
 //  2. If the updated quantity is at or below the configured threshold, a
 //     LowStockDetected event is published.
 func (h *UpdateStockHandler) Handle(ctx context.Context, cmd UpdateStockCommand) (UpdateStockResult, error) {
-	if cmd.TenantID == uuid.Nil {
+	if cmd.TenantID == uuid.Nil() {
 		return UpdateStockResult{}, fmt.Errorf("tenantID required: %w", domain.ErrInvalidArgument)
 	}
-	if cmd.StoreID == uuid.Nil {
+	if cmd.StoreID == uuid.Nil() {
 		return UpdateStockResult{}, fmt.Errorf("storeID required: %w", domain.ErrInvalidArgument)
 	}
-	if cmd.ProductID == uuid.Nil {
+	if cmd.ProductID == uuid.Nil() {
 		return UpdateStockResult{}, fmt.Errorf("productID required: %w", domain.ErrInvalidArgument)
 	}
 	if cmd.Delta == 0 {
