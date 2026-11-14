@@ -1,0 +1,90 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: POS-Stery
+      - uses: actions/checkout@v4
+        with:
+          repository: Briyantama/stery-kit
+          path: stery-kit
+          persist-credentials: false
+      - run: docker build -f POS-Stery/apps/api/Dockerfile -t pos-api:ci .
+
+  go:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_USER: pos
+          POSTGRES_PASSWORD: pos
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pos" --health-interval 5s --health-retries 10
+    env:
+      CHECK_STAGES: go
+      RACE: "1"
+      TEST_DATABASE_URL: postgres://pos:pos@127.0.0.1:5432/postgres?sslmode=disable
+      TEST_REDIS_ADDR: 127.0.0.1:6379
+      TEST_REDIS_PASSWORD: ci-redis-password
+      REDIS_PASSWORD: ci-redis-password
+    defaults:
+      run:
+        working-directory: POS-Stery
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: POS-Stery
+      - uses: actions/checkout@v4
+        with:
+          repository: Briyantama/stery-kit
+          path: stery-kit
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: POS-Stery/apps/api/go.mod
+      - name: Start Dragonfly
+        run: docker compose -f deploy/docker-compose.yml up -d dragonfly
+      - name: golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+      - name: check
+        run: bash scripts/check.sh
+
+  web:
+    runs-on: ubuntu-latest
+    env:
+      CHECK_STAGES: web
+    defaults:
+      run:
+        working-directory: POS-Stery
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: POS-Stery
+      - uses: actions/checkout@v4
+        with:
+          repository: Briyantama/stery-kit
+          path: stery-kit
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # @stery/kit and @pos-stery/ui are file: links; npm ci does not install a link target's own
+      # dependencies, and @pos-stery/ui publishes its types from dist/ (built, gitignored).
+      - name: install frontends
+        run: |
+          (cd ../stery-kit/web && npm ci)
+          (cd packages/ui && npm ci && npm run build)
+          (cd apps/admin && npm ci)
+          (cd apps/cashier && npm ci)
+      - name: check
+        run: bash scripts/check.sh

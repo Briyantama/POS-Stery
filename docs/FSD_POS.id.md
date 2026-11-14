@@ -1,0 +1,926 @@
+# FSD POS-Stery
+
+*Functional Specification Document: POS SaaS multi-tenant untuk toko ritel (produk `POS` dalam Stery Suite): perilaku fungsional saat ini (as-is) dan arsitektur target mengikuti STACK-SPEC*
+
+Catatan status (2026-11-14): bukti as-is pada bagian 2-4 disesuaikan dengan ADR-0001/0002 (satu modul Go, Dragonfly streams); status FR tidak berubah kecuali disebut. Berubah pada tanggal ini: FR-POS-04.4 Belum -> Sebagian (pencarian harga di server dan penolakan total negatif ada di `apps/api/services/sales`; batas diskon menurut peran belum ada, D-POS-07 `tbd`); FR-POS-SEC.6 Belum -> Sebagian (`ecosystem.config.cjs` tidak lagi memuat rahasia; pembersihan riwayat dan rotasi belum terbukti).
+
+| | |
+|---|---|
+| **Nama Dokumen** | FSD POS-Stery (Functional Specification Document) |
+| **Versi** | 1.0 (Draft) |
+| **Tanggal** | 6 November 2026 |
+| **Disusun oleh** | Tim Produk & Engineering |
+| **Status** | Draft untuk ditinjau |
+| **Dokumen Terkait** | `PRD.md` (PRD POS-Stery, bahasa Inggris); `BRD_POS.id.md` (kebutuhan bisnis BR-POS-01 s.d. BR-POS-21); `00_Analisis_Dampak_Risiko` (analisis dampak dan risiko Stery Suite); `SELA/CLAUDE.md` dan `SELA/docs/FSD_Sela.md` bagian 2 (sumber STACK-SPEC) |
+| **Perubahan dari vX** | Perubahan dari vX: Dokumen pertama |
+
+---
+
+## 1. Pendahuluan
+
+### 1.1 Tujuan
+
+FSD ini menjadi acuan teknis POS-Stery: (a) mendokumentasikan perilaku fungsional yang **sudah ada di kode** beserta status dan bukti, (b) menetapkan arsitektur target yang identik dengan STACK-SPEC Stery Suite (sumber: SELA) dan keputusan D1-D12, dan (c) mendaftar selisih as-is -> to-be pada bagian 2.7 agar penyelarasan (workstream S2) dapat direncanakan. Kebutuhan bisnis ada di `BRD_POS.id.md`; kebutuhan produk ada di `PRD.md` yang tidak diubah.
+
+### 1.2 Cakupan
+
+Modul katalog POS: 01 AUTH, 02 PRD (katalog), 03 INV, 04 SAL, 05 SUP, 06 CUS, 07 RPT, 08 NTF (Belum), 09 AI (Belum). Ditambah lintas modul: keamanan (`FR-POS-SEC.n`) dan non-fungsional (`NFR-POS-NN`, bagian 9). Tidak ada PRD POS baru; setiap rujukan "PRD" berarti `PRD.md`.
+
+### 1.3 Konvensi
+
+- **Status:** Selesai, Sebagian, Belum, Pending Verification, Ditunda. **Prioritas:** M (Must), S (Should), C (Could).
+- **Kebenaran = kode.** Jalur pada kolom `Bukti` relatif terhadap akar repo `POS-Stery` dan ada di disk pada tanggal dokumen. Dokumen status yang bertentangan dengan kode dicatat pada 11.3 dan tidak diulang sebagai fakta.
+- **As-is vs to-be.** Bagian 4 menggambarkan perilaku saat ini (status + bukti) dan, pada "Target", perilaku yang diwajibkan stack target. Jalur kode target hanya muncul pada tabel delta 2.7, tidak pernah pada kolom `Bukti`.
+- **Tanpa angka bisnis.** Harga, SLA, kuota, dan target kinerja adalah `tbd` beserta keputusan terbuka `D-POS-NN` (didefinisikan di BRD bagian 9.3). Estimasi usaha ditandai `[INFERENCE]`.
+- **Rahasia.** Dokumen hanya menyebut jalur berkas yang memuat rahasia, tidak pernah nilainya.
+- **Pembacaan statis.** Tidak ada build, lint, atau tes yang dijalankan untuk menyusun dokumen; temuan perilaku runtime ditandai `[INFERENCE]` atau Pending Verification.
+
+### 1.4 Ringkasan kondisi kode (fakta terverifikasi)
+
+| Fakta | Status | Bukti |
+|---|---|---|
+| Enam paket layanan (auth, product, inventory, sales, supplier, customer) dalam satu modul Go; server gRPC dan 28 RPC dihapus (ADR-0001) | Selesai | `apps/api/cmd/api/routes.go` |
+| `net/http` ServeMux stdlib melayani rute REST `/api/v1` dari keenam paket (tanpa tingkat gateway, bukan Laravel) | Selesai | `apps/api/cmd/api/routes.go` |
+| Tidak ada kontrak proto atau gRPC yang tersisa (tanpa `proto/`, tanpa `gen/`); REST adalah satu-satunya permukaan API | Selesai | `docs/adr/0001-single-module-go-api-on-sela-stack.md` |
+| 79 fungsi tes unit (berbasis stub); tidak ada tes integrasi Postgres | Selesai | `apps/api/services/sales/application/commands/create_sale_test.go` |
+| Dua aplikasi SvelteKit SSR (admin, kasir), seluruh halaman admin hanya baca | Sebagian | `apps/admin/src/hooks.server.ts` |
+
+---
+
+## 2. Arsitektur dan Stack
+
+### 2.1 Stack (STACK-SPEC, sumber SELA)
+
+Tabel berikut adalah STACK-SPEC normatif Stery Suite; kolom "Kondisi POS saat ini" menunjukkan titik awal penyelarasan. Kolom sumber menunjuk berkas SELA (kebenaran bagi standar).
+
+| # | Layer | Standar (target POS) | Sumber SELA | Kondisi POS saat ini |
+|---|---|---|---|---|
+| 1 | Layout repo | per produk: `apps/api`, `apps/web`, `deploy/`, `scripts/`, `docs/`, `Makefile`, `CLAUDE.md`, `AGENTS.md` | `SELA/CLAUDE.md` ("Layout"); `SELA/docs/FSD_Sela.md` 2.6 | `apps/api` (satu modul Go, biner `cmd/api` dan `cmd/migrate`, paket `services/<name>`), `apps/admin`, `apps/cashier`, `packages/ui`, `deploy/`, `scripts/`; kode bersama di repo saudara `stery-kit` (ADR-0001); tidak ada `AGENTS.md` |
+| 2 | Bahasa | Go >= 1.25.1, satu modul per produk `github.com/<owner>/<product>` (handle pemilik `Briyantama` seperti SELA; belum diverifikasi untuk repo baru) | `SELA/apps/api/go.mod` | satu modul `github.com/Briyantama/POS-Stery`, Go 1.25.1, di `apps/api` (2026-11-08) |
+| 3 | Dekomposisi | modul = paket Go `services/<name>` dalam satu proses: core `Service` + repositori Postgres + adapter HTTP + adapter gRPC opsional; batas lewat interface Go dan kontrak proto agar dapat dipisah kelak | `SELA/CLAUDE.md` ("Layout"); `SELA/docs/FSD_Sela.md` 2.2 | paket Go `apps/api/services/{auth,product,inventory,sales,supplier,customer}` dalam satu proses; sales dan supplier memanggil inventory dalam proses; tanpa adapter gRPC (2026-11-08) |
+| 4 | Transport | REST `/api/v1` pada `net/http` ServeMux stdlib, amplop `{success,data,error}` lewat `kit/httpx`; gRPC (`api/proto/v1`, buf, `gen/go` ter-commit, `scripts/proto-gen.sh --check`) untuk klien mesin/internal dengan interseptor deny-by-default; tanpa tier gateway; Caddy hanya reverse proxy | `SELA/apps/api/internal/httpx`; `SELA/scripts/proto-gen.sh`; `SELA/deploy/Caddyfile` | REST `/api/v1` pada ServeMux stdlib, amplop `{success,data,error}` lewat httpx `stery-kit`; tanpa tier gateway, tanpa gRPC (2026-11-08) |
+| 5 | Database | PostgreSQL 18 (`uuidv7()`), pgx/v5 SQL mentah (tanpa sqlc/ORM), goose v3.26.0 tertanam + `cmd/migrate up\|down`, `testdb.NewMigrated` | `SELA/apps/api/internal/db`; `SELA/apps/api/internal/testdb`; `SELA/apps/api/cmd/migrate` | PostgreSQL 18, goose v3.26.0 tertanam + `cmd/migrate up\|down`, satu rangkaian di `apps/api/internal/db/migrations`; `gen_random_uuid()`; pgx/v5 dengan sqlc tetap di auth (2026-11-08) |
+| 6 | Isolasi tenant | RLS wajib (D8): `ENABLE` + `FORCE`, kebijakan `tenant_isolation` dengan `USING` dan `WITH CHECK`, `current_setting('app.tenant_id', true)::uuid` diset per transaksi oleh `kit/tenantdb.WithTenant`; POS menambah `app.store_id`; peran aplikasi NOBYPASSRLS, peran migrasi terpisah; tes lintas-tenant wajib per modul | Keputusan D8 (SELA belum punya tenant/RLS; pola dibawa dari POS/HRIS) | `ENABLE`+`FORCE` pada semua tabel bertenant, 7 dari 15 kebijakan tanpa `WITH CHECK`, tidak ada kebijakan yang memakai `app.store_id` |
+| 7 | State store | Dragonfly lewat go-redis/v9: sesi (hanya hash), rate limit, kuota, antrean, skrip Lua | `SELA/apps/api/services/auth/service.go` | Dragonfly lewat go-redis/v9: daftar hitam jti JWT, rate limit 300/menit per IP dan 20/menit pada login (2026-11-08) |
+| 8 | Object storage | RustFS (S3) lewat aws-sdk-go-v2 di balik `objstore.Store`; hanya URL presigned; pemindaian ClamAV `clamd` gagal-tertutup pada jalur unggah | `SELA/apps/api/internal/objstore`; `SELA/apps/api/services/media/scan` | tidak dipakai (POS belum menyimpan berkas; PDF struk fase 2) |
+| 9 | Autentikasi | sesi opaque pada cookie HttpOnly Secure, hash di Dragonfly; tabel RBAC (roles, permissions, actions, role_actions) + `RequirePermission(code)`; tanpa JWT dan tanpa token di penyimpanan peramban | `SELA/apps/api/services/auth/service.go`; `SELA/apps/api/services/rbac` | JWT RS256 (`tid`, `sid`, `role`), cookie httpOnly berisi JWT, hanya tabel `roles` |
+| 10 | Asinkron | ticker worker dalam proses + outbox Postgres + konsumen idempoten; tanpa NATS/Kafka | `SELA/apps/api/cmd/api/main.go`; `SELA/apps/api/services/event/notify.go` | stream Dragonfly `pos:events` (ADR-0002), publikasi setelah commit, tidak ada konsumen (2026-11-08) |
+| 11 | Observabilitas | `log/slog`, `/healthz`; OpenTelemetry/Prometheus bukan baseline (keputusan D11, terbuka) | `SELA/apps/api/internal/health` | `log/slog`, `GET /healthz`; tanpa OTel/Prometheus (2026-11-08) |
+| 12 | Konfigurasi | variabel lingkungan, validasi fail-fast, rahasia tidak dicatat, `.env.example` | `SELA/apps/api/internal/config` | `config.Load(getenv)` validasi env dengan rahasia disamarkan; rahasia dibaca dari `.env` (2026-11-08) |
+| 13 | PII dan audit | `kit/piicrypt` (AES-256-GCM, AAD per tujuan, blind index, rotasi kunci); `kit/audit` `audit_logs` append-only dengan trigger DB | `SELA/apps/api/internal/piicrypt`; `SELA/apps/api/internal/audit` | PII pelanggan teks biasa; tabel `auth.audit_logs` ada tetapi tak ditulis dan tanpa trigger |
+| 14 | Pembayaran | `payment.Provider`, Midtrans QRIS (Xendit dihapus), webhook bertanda tangan, notifikasi lunas dicocokkan nominal | `SELA/apps/api/services/payment/provider.go`; `SELA/apps/api/services/payment/midtrans.go` | tidak ada; POS tidak menerapkan payment gateway (PRD §4). Penagihan langganan POS dilakukan platform (mode `suite`) |
+| 15 | Web | SvelteKit 2 + Svelte 5 + Vite 8 + TypeScript 6, `ssr=false`, `adapter-static`, npm, Node >= 20.19; `apiFetch` + cermin amplop; i18n `{id,en}` dengan tes paritas; Vitest 4 + Testing Library; Playwright (kanal Chrome) | `SELA/apps/web/package.json`; `SELA/apps/web/src/lib/api/client.ts`; `SELA/apps/web/src/lib/i18n/messages/parity.test.ts` | dua aplikasi SSR `adapter-node` dengan BFF proxy |
+| 16 | Deploy | Caddy; web statis (Vercel atau Caddy); `deploy/docker-compose.yml` untuk Dragonfly, RustFS, profil ClamAV; port standalone API 8080, gRPC 9090, web 5173 | `SELA/deploy/docker-compose.yml`; `SELA/deploy/Caddyfile` | PM2 `ecosystem.config.cjs` (`pos-api-8000`, `pos-admin-5173`, `pos-cashier-5174`); `deploy/docker-compose.yml` berisi Dragonfly; API 8000 (2026-11-08) |
+| 17 | Gerbang kualitas | `scripts/check.sh` (drift proto, gofmt, vet, golangci-lint, `go test -cover`, svelte-check, vitest, e2e nyata; `CHECK_STAGES`), job GitHub Actions go/web/e2e, lantai cakupan 80%, `-race` di CI | `SELA/scripts/check.sh`; `SELA/.github/workflows/ci.yml` | `scripts/check.sh` (tahap go, web), job GitHub Actions image/go/web, `-race` di CI; tanpa e2e, tanpa lantai cakupan (2026-11-08) |
+| 18 | Proses | TDD RED/GREEN, `docs/tracking/tracker.json` + `scripts/build_tracker.py`, FSD diperbarui bersama kode, artefak `docs/aidlc/` | `SELA/docs/tracking/tracker.json`; `SELA/scripts/build_tracker.py`; `SELA/docs/aidlc` | tidak ada tracker; PRD §20 mewajibkan PRD diperbarui sebelum kode |
+| 19 | Lokal | Indonesia default, Inggris didukung, IDR, WIB | `SELA/CLAUDE.md` ("Language") | UI berbahasa Inggris |
+
+Keputusan suite yang berlaku untuk POS (selengkapnya di rencana Stery Suite): D1 komposisi (POS tetap deployable terpisah), D2 `STERY_MODE=standalone|suite`, D3 sesi opaque `stery_session` pada mode `suite`, D4 entitlement dengan snapshot dan masa tenggang, D6 outbox tanpa NATS, D7 satu database `pos` dan satu peran aplikasi `pos`, D8 RLS, D9 satu `apps/web`, D10 login kata sandi dipertahankan dengan sesi opaque, D11 observabilitas `tbd`, D12 urutan penyelarasan (POS = S2).
+
+### 2.2 Dekomposisi modul
+
+| Modul | As-is: layanan (proses terpisah) | To-be: paket Go dalam satu proses | Status as-is | Bukti |
+|---|---|---|---|---|
+| 01 AUTH | paket `services/auth` di `apps/api` (dulu `auth-service` gRPC 8081); JWT diverifikasi middleware authn `stery-kit` | paket `auth` (sesi opaque, RBAC, penentuan tenant) + port `Identity` | Sebagian | `apps/api/services/auth/auth.go` |
+| 02 PRD | paket `services/product` (dulu `product-service` gRPC 8082) | paket `product` | Sebagian | `apps/api/services/product/http.go` |
+| 03 INV | paket `services/inventory` (dulu `inventory-service` gRPC 8083) | paket `inventory` | Sebagian | `apps/api/services/inventory/http.go` |
+| 04 SAL | paket `services/sales` (dulu `sales-service` gRPC 8084); memanggil `UpdateStockHandler` inventory dalam proses | paket `sales` memanggil `inventory` sebagai antarmuka Go dalam satu transaksi | Sebagian | `apps/api/services/sales/infrastructure/inventory_port.go` |
+| 05 SUP | paket `services/supplier` (dulu `supplier-service` gRPC 8085); mencatat stok lewat inventory dalam proses | paket `supplier` | Sebagian | `apps/api/services/supplier/http.go` |
+| 06 CUS | paket `services/customer` (dulu `customer-service` gRPC 8086) | paket `customer` | Sebagian | `apps/api/services/customer/http.go` |
+| 07 RPT | `GET /api/v1/sales/report` di dalam paket `sales` | paket `sales` (pelaporan) atau paket `report` | Sebagian | `apps/api/services/sales/http.go` |
+| 08 NTF | tidak ada | adapter port `Notification` (hub platform pada mode `suite`; worker outbox pada `standalone`) | Belum | `docs/adr/0002-dragonfly-streams-replace-nats-jetstream.md` |
+| 09 AI | tidak ada | tidak ada paket (PRD fase 2/3) | Belum | `docs/adr/0002-dragonfly-streams-replace-nats-jetstream.md` |
+| Gateway | `api-gateway` chi 8000 | dihapus; rute REST dipasang oleh `apps/api` pada satu `http.ServeMux` (ADR-0001) | Selesai | `apps/api/cmd/api/routes.go` |
+
+### 2.3 Komponen antarmuka
+
+| Komponen | Fungsi | Status | Bukti |
+|---|---|---|---|
+| Rute REST (ServeMux stdlib) | Authenticate -> RequireStore -> `WithRole` per rute, batas laju global per IP, login 20 per menit per IP | Selesai | `apps/api/cmd/api/main.go` |
+| Verifikator JWT + daftar hitam | verifikasi RS256 lokal dengan kunci publik; daftar hitam `jti` di Dragonfly | Selesai | `stery-kit/go/authn/rsa.go` |
+| Panggilan modul dalam proses | sales dan supplier memanggil `UpdateStockHandler` inventory langsung; klien gRPC gateway dan `x-service-token` dihapus (ADR-0001) | Selesai | `apps/api/services/sales/infrastructure/inventory_port.go` |
+| Admin web (SvelteKit SSR) | halaman baca: dashboard, produk, inventaris, pemasok, pelanggan, laporan | Sebagian | `apps/admin/src/routes/(app)/dashboard/+page.svelte` |
+| Cashier web (SvelteKit SSR + PWA parsial) | login kasir, POS, struk | Sebagian | `apps/cashier/src/routes/(app)/pos/+page.svelte` |
+| BFF proxy | `src/routes/api/[...path]/+server.ts` meneruskan ke gateway dengan token dari cookie | Selesai | `apps/admin/src/routes/api/[...path]/+server.ts` |
+| Paket UI bersama | `@pos-stery/ui` | Selesai | `packages/ui` |
+
+**Port Go (target, sama dengan Stery Suite).** Setiap produk memakai enam port dengan dua adapter (lokal untuk `standalone`, platform untuk `suite`) yang dipilih oleh `STERY_MODE`:
+
+```go
+Identity.Verify(ctx, token) (Principal, error)
+Tenant.WithTenant(ctx, tenantID, scope, fn)          // scope: tenant, tenant+store
+Entitlement.Allows(ctx, org, feature) (bool, error)
+Notification.Enqueue(ctx, tx, msg)
+Audit.Record(ctx, event)
+Events.Publish(ctx, tx, envelope)
+```
+
+Pemetaan ke POS: `Tenant.WithTenant` menggantikan `WithTenantContext` (menambah `app.store_id`); `Entitlement.Allows` memeriksa fitur dan dimensi `pos.stores.max`, `pos.devices.max`; `Events.Publish` menulis baris outbox dalam transaksi bisnis.
+
+### 2.4 Penggunaan Dragonfly
+
+| Penggunaan | As-is (Redis) | Target (Dragonfly) | Bukti as-is |
+|---|---|---|---|
+| Daftar hitam akses token | kunci `jti` saat logout, dibaca middleware authn `stery-kit` | dihapus: sesi opaque dicabut dengan menghapus hash sesi | `apps/api/services/auth/infrastructure/redisstore/token_blacklist.go` |
+| Sesi | tidak ada (JWT tanpa keadaan; refresh token di Postgres) | `session:<sha256>` -> atribut (`user_id`, `tenant_id`, `store_id`, `role`) TTL `tbd` (D-POS-11); hanya hash disimpan | `apps/api/services/auth/domain/refresh_token.go` |
+| Rate limit | penghitung Dragonfly lewat `stery-kit/go/ratelimit` (global per IP, login 20 per menit per IP) | penghitung Dragonfly per alamat/akun (login 20 per menit per IP dipertahankan) | `apps/api/cmd/api/main.go` |
+| Kunci lockout login | tidak ada | `login:fail:<email-hash>` [INFERENCE: selaras `SELA/CLAUDE.md` invariants auth] | `apps/api/services/auth/application/commands/login.go` |
+| Daftar perangkat kasir aktif (`pos.devices.max`) | tidak ada | registri perangkat di Postgres + denyut jantung `device:<id>` di Dragonfly [INFERENCE: desain belum ada] | `apps/cashier/src/routes/(auth)/login/+page.svelte` |
+
+Port standalone: Dragonfly 6379. Port profil suite: POS memakai Dragonfly 6382 (instans per produk, D7).
+
+### 2.5 Event dan outbox
+
+**As-is (stream Dragonfly, ADR-0002).** Stream `pos:events` ditulis dengan `XADD ... MAXLEN ~ 100000`; amplop dibangun oleh penerbit events `stery-kit`; publikasi setelah commit, kegagalan dicatat. Stream ini menggantikan NATS JetStream `POS_EVENTS` pada 2026-11-08. POS tidak mendaftarkan consumer group, sehingga tidak ada pelanggan (subscriber) di seluruh kode.
+
+| Subjek | Penerbit | Konsumen | Status | Bukti |
+|---|---|---|---|---|
+| `Product.LowStock` | inventory (`UpdateStock`, kuantitas <= ambang; gagal terbit ditelan) | tidak ada | Sebagian | `apps/api/services/inventory/infrastructure/publisher.go` |
+| `Sale.Completed` | sales (best-effort setelah commit) | tidak ada (seharusnya customer/loyalitas) | Sebagian | `apps/api/services/sales/infrastructure/event_publisher.go` |
+| `Inventory.Replenished` | supplier (per item diterima) | tidak ada | Sebagian | `apps/api/services/supplier/infrastructure/event_publisher.go` |
+| `Customer.New` | customer | tidak ada | Sebagian | `apps/api/services/customer/infrastructure/event_publisher.go` |
+| `AI.OrderForecasted` | tidak ada | tidak ada | Belum | `docs/adr/0002-dragonfly-streams-replace-nats-jetstream.md` |
+
+**Target (D6).** Peristiwa domain dalam proses + baris outbox Postgres pada transaksi bisnis; worker ticker membaca outbox dengan `FOR UPDATE SKIP LOCKED`; konsumen idempoten dengan tabel `processed_events`. Amplop lintas produk: `{event_id UUIDv7, event_type, org_id, store_id?, actor_id, occurred_at, schema_version, payload}`; pengiriman at-least-once ke platform `IntegrationService/Publish`; opt-in per organisasi lewat fitur entitlement `integration.<a>_<b>`. Pemetaan subjek: `Product.LowStock` -> `inventory.low_stock`, `Sale.Completed` -> `sales.sale.completed`, `Inventory.Replenished` -> `supplier.stock.received`, `Customer.New` -> `customer.created` (nama final `tbd` pada S2). Pelanggan dalam proses pertama: loyalitas pada `sales.sale.completed` (idempoten per `sale_id`) dan notifikasi stok rendah.
+
+### 2.6 Struktur kode dan kontrak
+
+**As-is.** Satu modul Go di `apps/api` (`cmd/api`, `cmd/migrate`, `internal/{config,db,testdb}`, `services/{auth,product,inventory,sales,supplier,customer}` dengan `domain`, `application`, `infrastructure` dan satu `http.go` per paket; auth juga memuat keluaran sqlc), `apps/{admin,cashier}`, `packages/ui`, `deploy/docker-compose.yml`, `scripts/check.sh`. Kode bersama berasal dari repo saudara `stery-kit/go` (authn, events, health, httpx, migrate, objstore, pgtenant, ratelimit, testdb). Tidak ada lagi `proto/`, `gen/`, `go.work`, atau `go.mod` per layanan (ADR-0001).
+
+| Kontrak | Lokasi | Status | Bukti |
+|---|---|---|---|
+| Rute REST `/api/v1` | `Register(mux)` pada tiap `apps/api/services/<name>/http.go`, dipasang di `apps/api/cmd/api/routes.go` | Selesai | `apps/api/cmd/api/routes.go` |
+| Kode sqlc terbangkit (hanya auth) | `apps/api/services/auth/infrastructure/postgres/db` | Selesai | `apps/api/services/auth/sqlc.yaml` |
+| Migrasi | satu seri goose `0001`-`0065` tertanam di `apps/api/internal/db/migrations` | Selesai | `apps/api/internal/db/migrations/0013_auth_login_tenant_resolver.sql` |
+| Validasi migrasi | `TestMigrations_versionsAreUnique` memeriksa versi unik; pemeriksaan pasangan up/down tidak diperlukan pada goose | Sebagian | `apps/api/internal/db/migrate_versions_test.go` |
+
+**Target.** `apps/api` (satu modul Go, `cmd/api`, `cmd/migrate`, `services/<name>`, `api/proto/v1`, `gen/go`, migrasi goose tertanam), `apps/web` (satu SPA dengan route group `(admin)` dan `(cashier)`), `deploy/`, `scripts/check.sh`, `docs/tracking/tracker.json`, `AGENTS.md`; kode bersama diimpor dari `kit` (repo `stery-suite`). Rincian jalur target ada pada 2.7.
+
+### 2.7 Delta penyelarasan as-is -> to-be
+
+Reuse: lapisan `domain` dan `application` dipertahankan (logika bisnis dan tes unit), `infrastructure` dan `interfaces` ditulis ulang. Estimasi usaha S/M/L [INFERENCE] (S = hari, M = minggu, L = beberapa minggu; belum divalidasi).
+
+| as-is -> to-be | modul terdampak | reuse (domain/application kept, infrastructure/interfaces rewritten) | effort S/M/L [INFERENCE] |
+|---|---|---|---|
+| Gateway Go `chi` (`services/api-gateway`) -> REST `/api/v1` pada ServeMux stdlib di `apps/api/cmd/api` dengan amplop `{success,data,error}` lewat `kit/httpx` | semua | handler dipetakan ulang; middleware Tenant/Store/Role menjadi `RequirePermission` | M; sebagian 2026-11-08 |
+| Enam proses gRPC + saga antar-layanan -> paket Go `apps/api/services/<name>` dalam satu proses, antar modul lewat interface Go | 03, 04, 05 | domain dan perintah (`create_sale.go`, `receive_stock.go`) dipertahankan; klien gRPC antar-layanan dihapus | L; selesai 2026-11-08 |
+| gRPC `X-Service-Token` gagal-terbuka (`docs/adr/0001-single-module-go-api-on-sela-stack.md`) -> interseptor deny-by-default dengan allowlist publik; gRPC hanya untuk klien mesin | 01 | tidak ada (ditulis ulang) | S; selesai 2026-11-08 |
+| JWT RS256 (`tid`, `sid`, `role`) + refresh token -> sesi opaque cookie `stery_session`/cookie sesi POS dengan atribut `store_id`, hash di Dragonfly (D3, D10); bcrypt dipertahankan (`apps/api/services/auth/application/commands/login.go`) | 01 | domain `User`/`Store`/`Tenant`, penentuan tenant `auth.resolve_login_tenant`, rotasi/deteksi pemakaian ulang diganti kedaluwarsa sesi | M |
+| `golang-migrate` -> goose v3.26.0 tertanam + `cmd/migrate`; konsolidasi migrasi per layanan menjadi satu rangkaian | semua | SQL tabel dipertahankan; tambah migrasi untuk perbaikan (CHECK stok, `WITH CHECK`, kolom baru) | M; selesai 2026-11-08 |
+| sqlc (hanya `auth-service`) dan pgx 5.6.0 -> pgx/v5 SQL mentah tanpa sqlc | 01 | kueri sqlc ditulis ulang sebagai SQL mentah | S |
+| zap + viper -> `log/slog` + konfigurasi env fail-fast (`kit/config`) | semua | tidak ada | S; selesai 2026-11-08 |
+| Redis -> Dragonfly (go-redis/v9) | 01 | klien go-redis dipertahankan | S; selesai 2026-11-08 |
+| NATS JetStream -> outbox Postgres + worker ticker + `processed_events` (D6) | 03, 04, 05, 06 | penerbit (`nats_publisher.go`) diganti `Events.Publish`; kontrak payload dipertahankan | M; diganti 2026-11-08 oleh stream Dragonfly, ADR-0002 |
+| `WithTenantContext` (`SET LOCAL`, tidak terverifikasi) -> `kit/tenantdb.WithTenant` (`set_config(..., true)`, tenant + `app.store_id`) + tes lintas-tenant | semua | tidak ada | M; sebagian 2026-11-08 |
+| RLS: tambah `WITH CHECK` pada 7 kebijakan; tambah kebijakan `app.store_id` pada tabel toko; peran `pos_admin`/`pos_app` -> peran migrasi terpisah + peran aplikasi NOBYPASSRLS tunggal `pos` | semua | skema dipertahankan | S |
+| Penjualan: saga gRPC -> satu transaksi DB dengan kunci idempotensi, harga dari server, penurunan stok bersyarat, buku besar pergerakan stok, outbox (7.1) | 04, 03 | validasi dan perhitungan total dipertahankan | M |
+| Loyalitas: tanpa pemanggil -> dipanggil dalam proses setelah commit lewat konsumen outbox, idempoten per `sale_id` | 06, 04 | `add_loyalty_points.go` dipertahankan | S |
+| Penerimaan PO: non-atomik, tanpa parsial -> satu transaksi, kuantitas diterima per item, status parsial (7.2) | 05 | entitas PO dipertahankan | M |
+| Money `float64` di Go -> representasi eksak (bilangan bulat satuan rupiah di Go; kolom `NUMERIC(12,2)` tetap) | 04, 05, 07 | tipe dan tes disesuaikan | S |
+| Rute REST 14 -> paritas penuh dengan operasi modul (6.2), prefiks `/api/v1`, `PUT` produk dst. | semua | tidak ada | M |
+| Admin + cashier SSR (`adapter-node`, BFF) -> satu `apps/web` SPA statis, route group `(admin)` dan `(cashier)`, `apiFetch`, i18n `{id,en}` | 10 | `packages/ui` dan komponen halaman dipindahkan | L |
+| PWA kasir hanya cache aset -> antrean offline IndexedDB, scope service worker `/cashier/` (7.3) | 04 | tidak ada | M |
+| Dashboard: data sintetis -> data nyata dengan nama produk dan bauran pembayaran | 07 | halaman dipertahankan sebagai kerangka | S |
+| PM2 `ecosystem.config.cjs` + compose (redis, nats, jaeger, prometheus) -> Caddy + `deploy/docker-compose.yml` (Dragonfly, RustFS, ClamAV profil) | deploy | tidak ada | S; sebagian 2026-11-08 |
+| Go 1.24/1.25 dan Postgres 16 -> Go >= 1.25.1 dan PostgreSQL 18; CI -> `scripts/check.sh` + job go/web/e2e, `-race`, lantai 80% | CI | tes unit dipertahankan | M; sebagian 2026-11-08 |
+| Rahasia terlacak (`ecosystem.config.cjs`, `apps/api/internal/db/migrations/0001_bootstrap.sql`) -> `.env.example` tanpa nilai rahasia; rotasi dan pembersihan riwayat git | deploy, 01 | tidak ada | S |
+| OpenTelemetry/Prometheus (hanya dependensi) -> D11 `tbd`; baseline `slog` + `/healthz` | semua | tidak ada | S; selesai 2026-11-08 |
+| Adapter mode `suite` untuk enam port + entitlement `pos.stores.max`, `pos.devices.max` (S4) | 01, 05, 08 | port diperkenalkan pada S2 dengan adapter lokal | M |
+
+**Urutan workstream S2** (tiap butir menutup satu atau lebih butir gerbang BRD 12.1): WS-1 perbaikan keamanan dan kebersihan (G5, G7, G8 sebagian; dapat dikerjakan lebih awal), WS-2 fondasi `apps/api` dan basis data (goose, PG18, tenantdb, G4, G6), WS-3 pemindahan modul 01-03 dan 05-07, WS-4 penjualan transaksional dan loyalitas (G1), WS-5 permukaan REST penuh (G2), WS-6 `apps/web` tunggal dan offline, WS-7 CI `check.sh` (G3), WS-8 keputusan PPN/struk (G8).
+
+---
+
+## 3. Aktor dan Model Hak Akses
+
+### 3.1 Aktor
+
+| Aktor | Deskripsi | Login | Bukti |
+|---|---|---|---|
+| Admin tenant (`admin`) | mengelola produk, stok, pemasok, pelanggan, laporan, harga | email + kata sandi | `apps/api/services/auth/domain/user.go` |
+| Kasir (`cashier`) | menjual; terikat pada satu toko; login mewajibkan `store_id` | email + kata sandi + `store_id` | `apps/api/services/auth/application/commands/login.go` |
+| Manajer stok (`stock_manager`) | inventaris, PO, penerimaan stok | email + kata sandi | `apps/api/cmd/api/routes.go` |
+| Pelanggan toko | dicatat untuk loyalitas; tidak login | tidak ada | `apps/api/internal/db/migrations/0061_customer_schema.sql` |
+| Platform (mode `suite`) | menerbitkan sesi, entitlement, notifikasi, audit | layanan ke layanan (HMAC) | belum ada pada POS (Belum) |
+| Operator (pemasangan) | membuat tenant, toko, pengguna pertama | belum ada jalur (Belum) | `apps/api/services/auth/infrastructure/postgres/user_repository.go` |
+
+Catatan kode: `User.PrimaryRole()` hanya mengambil peran pertama pengguna, sehingga multi-peran per pengguna belum didukung efektif (Sebagian).
+
+### 3.2 Matriks hak akses as-is (penegakan di gateway `WithRole`)
+
+| Operasi (rute) | admin | cashier | stock_manager |
+|---|---|---|---|
+| `POST /api/logout` | ya | ya | tidak |
+| `GET /api/products` | ya | ya | tidak |
+| `POST /api/products`, `PUT /api/products/{id}` | ya | tidak | tidak |
+| `GET /api/inventory`, `POST /api/inventory` | ya | tidak | ya |
+| `POST /api/sales` | tidak | ya | tidak |
+| `GET /api/sales/report` | ya | tidak | tidak |
+| `GET /api/suppliers`, `POST /api/purchase-orders` | ya | tidak | ya |
+| `POST /api/suppliers` | ya | tidak | tidak |
+| `GET /api/customers`, `POST /api/customers` | ya | ya | tidak |
+
+Temuan: `stock_manager` tidak dapat melihat produk (`GET /api/products`) padahal perlu memilih produk untuk PO, dan tidak dapat memanggil `POST /api/logout`; `admin` tidak dapat membuat penjualan. Bukti: `apps/api/cmd/api/routes.go`. Peran tersimpan pada `auth.roles` (hanya tabel peran; tidak ada tabel `permissions` meski PRD §12 mengisyaratkannya). Target: katalog izin dan `RequirePermission(code)` (FR-POS-01.9).
+
+### 3.3 Model hak akses target
+
+- Peran tetap `admin`, `cashier`, `stock_manager`, dipetakan ke izin (`products:write`, `sales:create`, `reports:read`, dst.; katalog final `tbd` pada S2) pada tabel `roles`, `permissions`, `actions`, `role_actions`.
+- Atribut sesi: `user_id`, `tenant_id`, `store_id` (kasir wajib), `role`; admin memilih toko aktif lewat selektor (mengubah atribut sesi `store_id`, bukan header `X-Store-ID` bebas).
+- Rute tingkat tenant (produk, pemasok, pelanggan) tidak memerlukan toko; rute tingkat toko (inventaris, penjualan, PO) memerlukannya.
+- Mode `suite`: sesi dan izin dasar berasal dari platform (`Identity.Verify`); peran produk dipetakan dari keanggotaan organisasi (rinci `tbd`).
+
+---
+
+## 4. Spesifikasi Fungsional per Modul
+
+Setiap modul: ringkasan, tabel FR (`ID | Requirement | Prioritas (M/S/C) | Status | Bukti`), lalu aturan bisnis, mesin keadaan (bila ada), dan peristiwa.
+
+### 4.01 AUTH (identitas, tenant, toko, RBAC)
+
+Login kata sandi bcrypt dengan penentuan tenant dari email (fungsi SECURITY DEFINER `auth.resolve_login_tenant`; email ambigu ditolak), JWT RS256 berumur 10 menit dengan klaim `tid`, `sid`, `role`, `email`; refresh token opaque 30 hari dengan hash SHA-256, rotasi dalam satu keluarga dan pencabutan keluarga saat pemakaian ulang terdeteksi. Gateway memverifikasi JWT secara lokal (kunci publik) dan memeriksa daftar hitam `jti`.
+
+| ID | Requirement | Prioritas | Status | Bukti |
+|---|---|---|---|---|
+| FR-POS-01.1 | Login email + kata sandi (bcrypt); tenant ditentukan dari email lewat `auth.resolve_login_tenant`; email ambigu gagal-tertutup | M | Selesai | `apps/api/services/auth/application/commands/login.go`; `apps/api/internal/db/migrations/0013_auth_login_tenant_resolver.sql` |
+| FR-POS-01.2 | Login kasir wajib menyertakan `store_id` yang sama dengan toko yang ditugaskan; token membawa `sid` | M | Selesai | `apps/api/services/auth/application/commands/login.go` |
+| FR-POS-01.3 | Admin memilih toko aktif; gateway memvalidasi `X-Store-ID` lewat `ValidateStore`; UI selektor toko admin ada | M | Sebagian | `apps/api/services/auth/auth.go`; `apps/admin/src/lib/api.ts` |
+| FR-POS-01.4 | Refresh token dengan rotasi dan pencabutan keluarga saat pemakaian ulang; tersedia lewat REST dan dipakai web | M | Sebagian | `apps/api/services/auth/application/commands/refresh.go`; `apps/api/services/auth/application/commands/refresh_test.go` |
+| FR-POS-01.5 | Logout (daftar hitam `jti` + cabut refresh), logout semua perangkat, daftar sesi; tersedia untuk semua peran | S | Sebagian | `apps/api/services/auth/application/commands/logout.go`; `apps/api/services/auth/application/commands/logout_all.go`; `apps/api/services/auth/application/commands/sessions.go` |
+| FR-POS-01.6 | Penegakan peran `admin`/`cashier`/`stock_manager` di API (`WithRole`) | M | Selesai | `stery-kit/go/authn/authn.go`; `stery-kit/go/authn/authn_test.go` |
+| FR-POS-01.7 | Batas laju login 20 per menit per IP dan 300 per menit global; badan permintaan maksimum 4 MB | M | Selesai | `apps/api/cmd/api/main.go` |
+| FR-POS-01.8 | Pemasangan: membuat tenant, toko, pengguna pertama, dan pengaturan ulang kata sandi tanpa SQL manual | M | Belum | `apps/api/services/auth/infrastructure/postgres/user_repository.go` |
+| FR-POS-01.9 | Katalog izin (`permissions`, `actions`, `role_actions`) dan `RequirePermission(code)` menggantikan daftar peran per rute | S | Belum | `apps/api/internal/db/migrations/0011_auth_schema.sql` |
+| FR-POS-01.10 | Sesi opaque (cookie HttpOnly Secure, hash di Dragonfly) dengan atribut `store_id` menggantikan JWT; tanpa token di penyimpanan peramban | M | Belum | `apps/api/services/auth/infrastructure/jwt/signer.go` |
+| FR-POS-01.11 | Cookie sesi HttpOnly pada aplikasi web, penegakan peran di `hooks.server.ts` | S | Sebagian | `apps/admin/src/hooks.server.ts`; `apps/admin/src/lib/server/session.ts` |
+| FR-POS-01.12 | Mode `STERY_MODE=standalone|suite` memilih adapter enam port; default `standalone` | M | Belum | `apps/api/internal/config/config.go` |
+| FR-POS-01.13 | Penegakan entitlement `pos.stores.max` (pembuatan toko) dan `pos.devices.max` (login perangkat kasir) dengan snapshot dan degradasi aman | M | Belum | `apps/api/services/auth/infrastructure/postgres/store_repository.go` |
+
+**Aturan bisnis**
+
+- Email login harus menentukan tepat satu tenant; jika ambigu, login ditolak tanpa petunjuk (as-is, `auth.resolve_login_tenant`).
+- Kasir hanya boleh login ke toko yang ditugaskan; admin dapat memilih toko mana pun milik tenant-nya (divalidasi `ValidateStore`).
+- Tabel `auth.tenants` dan `auth.roles` tidak memiliki RLS; `auth.refresh_tokens` tidak memiliki RLS dengan sengaja (dibaca sebelum konteks tenant ada). Pada target, tabel tanpa RLS wajib didaftarkan dan dibatasi (G4).
+- Satu pengguna memiliki satu peran efektif (`PrimaryRole` = peran pertama).
+- Mode `suite`: perilaku `standalone` tidak berubah; sesi dan entitlement berasal dari platform.
+
+**Mesin keadaan (refresh token)**
+
+| Dari | Peristiwa | Ke |
+|---|---|---|
+| aktif | refresh dipakai | dicabut, token baru dalam keluarga sama (`replaced_by`) |
+| dicabut | dipakai lagi | seluruh keluarga dicabut |
+| aktif | logout / logout-all | dicabut |
+| aktif | lewat 30 hari | kedaluwarsa |
+
+Target: tidak ada refresh token; sesi opaque dengan masa berlaku geser (TTL `tbd`).
+
+**Peristiwa.** Diproduksi: tidak ada (as-is); target `auth.user.logged_in` untuk audit (`tbd`). Dikonsumsi: tidak ada.
+
+### 4.02 PRD (katalog produk)
+
+| ID | Requirement | Prioritas | Status | Bukti |
+|---|---|---|---|---|
+| FR-POS-02.1 | Membuat produk (nama, `sku` unik per tenant, `barcode`, `base_price`, `sale_price`, `unit`, kategori) | M | Selesai | `apps/api/services/product/application/commands/create_product.go`; `apps/api/services/product/application/commands/create_product_test.go` |
+| FR-POS-02.2 | Mengubah produk (nama, harga, status aktif) tanpa mengubah `is_active` secara tidak sengaja | M | Sebagian | `apps/api/services/product/application/commands/update_product.go` |
+| FR-POS-02.3 | Mengambil produk berdasarkan id lewat REST | S | Sebagian | `apps/api/services/product/http.go` |
+| FR-POS-02.4 | Mencari produk berdasarkan nama, SKU, dan barcode dengan paginasi (limit/offset diteruskan) | M | Sebagian | `apps/api/services/product/infrastructure/postgres/product_repository.go`; `apps/api/services/product/application/queries/search_products.go` |
+| FR-POS-02.5 | Riwayat perubahan harga yang dapat diaudit (siapa, kapan, nilai lama dan baru) | S | Belum | `apps/api/services/product/application/commands/update_product.go` |
+| FR-POS-02.6 | Manajemen kategori (buat, ubah, daftar) | S | Belum | `apps/api/internal/db/migrations/0021_product_schema.sql` |
+| FR-POS-02.7 | Formulir admin untuk membuat dan mengubah produk | M | Belum | `apps/admin/src/routes/(app)/products/+page.svelte` |
+
+**Aturan bisnis**
+
+- `UNIQUE(tenant_id, sku)`; produk dihapus lunak (`deleted_at`).
+- Pencarian as-is: `name ILIKE` atau `barcode` sama persis; SKU tidak dicari (placeholder UI "name or SKU" menyesatkan). Gateway hanya meneruskan parameter `q`.
+- Handler `UpdateProduct` menetapkan `is_active` sesuai permintaan (false bila dihilangkan) sehingga pembaruan parsial menonaktifkan produk (as-is, dibaca statis).
+- Harga: `base_price` dan `sale_price` opsional (`NUMERIC(12,2)`); penjualan mencari harga satuan di server dan mengabaikan `unit_price` klien (FR-POS-04.4; `apps/api/services/sales/infrastructure/price_port.go`).
+- Perubahan harga hanya oleh `admin`.
+
+**Mesin keadaan.** `aktif` <-> `nonaktif` (`is_active`); `dihapus` (soft delete). Tidak ada transisi lain.
+
+**Peristiwa.** Diproduksi: tidak ada (target `product.price_changed` untuk audit, `tbd`). Dikonsumsi: tidak ada.
+
+### 4.03 INV (inventaris)
+
+| ID | Requirement | Prioritas | Status | Bukti |
+|---|---|---|---|---|
+| FR-POS-03.1 | Menambah item stok per toko dengan kuantitas awal (`UNIQUE(tenant_id, store_id, product_id)`) | M | Selesai | `apps/api/services/inventory/application/commands/add_item.go` |
+| FR-POS-03.2 | Mengubah stok secara atomik dan tidak pernah negatif, termasuk saat konkurensi (UPDATE bersyarat + `CHECK (quantity >= 0)`) | M | Sebagian | `apps/api/services/inventory/application/commands/update_stock.go`; `apps/api/services/inventory/infrastructure/postgres/stock_repository.go` |
+| FR-POS-03.3 | Buku besar pergerakan stok: setiap perubahan mencatat delta, alasan, jenis dan id rujukan (penjualan, penerimaan, penyesuaian), pelaku | M | Belum | `apps/api/services/inventory/application/commands/update_stock.go` |
+| FR-POS-03.4 | Mengatur ambang stok per produk per toko; daftar dan get item melaporkan `min_quantity` dan `is_low_stock` dengan benar | M | Sebagian | `apps/api/services/inventory/application/commands/set_threshold.go`; `apps/api/services/inventory/http.go` |
+| FR-POS-03.5 | Peristiwa stok rendah dipublikasikan saat kuantitas melewati ambang, dikonsumsi notifikasi | M | Sebagian | `apps/api/services/inventory/infrastructure/publisher.go` |
+| FR-POS-03.6 | Daftar item per toko dengan filter stok rendah; get item lewat REST | M | Sebagian | `apps/api/services/inventory/application/queries/list_items.go`; `apps/api/services/inventory/application/queries/get_item.go` |
+| FR-POS-03.7 | Penyesuaian stok manual dan pengaturan ambang tersedia lewat REST dan UI admin | M | Belum | `apps/api/services/inventory/http.go` |
+
+**Aturan bisnis**
+
+- Stok tidak boleh negatif (PRD §13). As-is: `update_stock.go` membaca item (`GetItem`) lalu mengeksekusi `UPDATE ... quantity = quantity + $1` tanpa penjaga `quantity + $1 >= 0` dan tanpa `CHECK` di tabel, sehingga dua penjualan serentak dapat menghasilkan stok negatif (TOCTOU; dibaca statis, tidak diuji runtime) [INFERENCE].
+- Parameter `reason` dan rujukan diabaikan oleh repositori (tidak ada buku besar).
+- `AddItem`, `ListItems`, `GetItem` mengembalikan `min_quantity = 0` dan `is_low_stock = false` karena konversi proto memakai nilai tetap; hanya `UpdateStock` mengisi `LowStockAlert` dengan benar (`apps/api/services/inventory/http.go`).
+- Peristiwa stok rendah dipublikasikan bila kuantitas <= ambang; kegagalan publikasi ditelan.
+- Target: pengurangan stok oleh penjualan dalam transaksi penjualan (7.1); setiap perubahan menulis baris `stock_movements`.
+
+**Mesin keadaan.** Tidak ada status; kuantitas bertambah/berkurang dengan alasan: `RECEIPT`, `SALE`, `ADJUSTMENT` (alasan as-is dikirim tetapi dibuang).
+
+**Peristiwa.** Diproduksi: `Product.LowStock` (target `inventory.low_stock`). Dikonsumsi: target `sales.sale.completed` tidak diperlukan (pengurangan dalam transaksi); `supplier.stock.received` dalam proses.
+
+### 4.04 SAL (penjualan, diskon, struk)
+
+| ID | Requirement | Prioritas | Status | Bukti |
+|---|---|---|---|---|
+| FR-POS-04.1 | Membuat penjualan dengan item (produk, kuantitas), memvalidasi masukan dan menghitung subtotal, diskon, total | M | Sebagian | `apps/api/services/sales/application/commands/create_sale.go`; `apps/api/services/sales/application/commands/create_sale_test.go` |
+| FR-POS-04.2 | Pengurangan stok dan penyimpanan penjualan + struk dalam satu transaksi database | M | Sebagian | `apps/api/services/sales/application/commands/create_sale.go`; `apps/api/services/sales/infrastructure/inventory_port.go` |
+| FR-POS-04.3 | Pembuatan penjualan idempoten: ID penjualan dari klien (`client_sale_id`) unik per tenant dan toko; retry mengembalikan penjualan yang sama | M | Belum | `apps/api/services/sales/application/commands/create_sale.go` |
+| FR-POS-04.4 | Harga satuan dicari di server dari katalog; diskon dibatasi wewenang peran; total tidak boleh negatif tanpa penolakan | M | Sebagian | `apps/api/services/sales/infrastructure/price_port.go`; `apps/api/services/sales/application/commands/create_sale.go`; `apps/api/services/sales/http.go` |
+| FR-POS-04.5 | PPN/pajak dihitung dan disimpan pada penjualan dan struk sesuai keputusan D-POS-01 | M | Belum | `apps/api/services/sales/domain/sale.go` |
+| FR-POS-04.6 | Metode pembayaran (tunai, QRIS, debit sebagai pencatatan) disimpan pada penjualan sesuai D-POS-04 | S | Belum | `apps/cashier/src/routes/(app)/pos/+page.svelte` |
+| FR-POS-04.7 | Struk disimpan sebagai snapshot JSONB unik per penjualan (item, total, kasir, toko, pelanggan, pajak, metode pembayaran) | M | Sebagian | `apps/api/services/sales/infrastructure/postgres/sale_repository.go`; `apps/api/internal/db/migrations/0041_sales_create_sales_schema.sql` |
+| FR-POS-04.8 | Mengambil penjualan dan struk berdasarkan id lewat REST (`GetSale`) | M | Sebagian | `apps/api/services/sales/http.go` |
+| FR-POS-04.9 | Peristiwa `Sale.Completed` ditulis dalam transaksi (outbox) dan dikonsumsi loyalitas | M | Sebagian | `apps/api/services/sales/infrastructure/event_publisher.go` |
+| FR-POS-04.10 | Antarmuka kasir: cari/pindai, keranjang, penyelesaian, tampilan dan cetak struk, riwayat struk | M | Sebagian | `apps/cashier/src/routes/(app)/pos/+page.svelte` (rute `receipts` sudah tidak ada) |
+| FR-POS-04.11 | Pembatalan (void) dan retur penjualan sesuai kebijakan D-POS-06 | C | Belum | `apps/api/services/sales/domain/sale.go` |
+| FR-POS-04.12 | Antrean penjualan offline di perangkat kasir dengan sinkron otomatis tanpa duplikasi (7.3) | S | Belum | `apps/cashier/src/service-worker.ts` |
+
+**Aturan bisnis**
+
+- Penjualan harus menurunkan stok secara atomik dan membuat struk (PRD §13). As-is: urutan `validasi -> hitung (harga dicari di server) -> inventory.DeductStock per item (panggilan dalam proses ke `UpdateStockHandler` inventory) -> saleRepo.Create (sale + item + struk satu transaksi) -> PublishSaleCompleted (stream Dragonfly, best-effort)`; bila deduksi atau `Create` gagal, `compensate()` memanggil `RestoreStock` per item dan hanya mencatat peringatan bila pemulihan gagal. Pengurangan stok berkomitmen terpisah dari penjualan (`apps/api/services/sales/application/commands/create_sale.go`).
+- Cacat as-is: tidak ada kunci idempotensi; `Discount` dan `discount_amount` berasal dari pemanggil (dibatasi oleh jumlah baris dan subtotal, tidak pernah negatif, sehingga total tidak bisa di bawah 0); harga satuan kini dibaca dari katalog; uang bertipe `float64` di Go sementara kolom `NUMERIC(12,2)`; tidak ada PPN/metode pembayaran/pelanggan pada snapshot; tidak ada panggilan loyalitas; tidak ada pemeriksaan wewenang diskon menurut peran; `completed_at` dan batas hari laporan memakai zona waktu sesi DB, bukan WIB.
+- Badan permintaan: `createSaleBody` memuat `customer_id`, `items[{product_id, quantity, unit_price (diabaikan), discount}]`, `discount_amount`, `notes`; `payment_method` dari UI kasir dibuang (`apps/api/services/sales/http.go`).
+- Hanya peran `cashier` yang dapat membuat penjualan (penjaga rute di `apps/api/services/sales/http.go`).
+- Struk unik per penjualan (`sales.receipts.sale_id UNIQUE`).
+- Target: lihat 7.1; PPN dan metode pembayaran `tbd` (D-POS-01, D-POS-04); wewenang diskon `tbd` (D-POS-07).
+
+**Mesin keadaan (penjualan).** As-is hanya satu nilai `status`: `COMPLETED` (default kolom; tidak ada nilai lain di kode). Target (setelah keputusan D-POS-06): `COMPLETED -> VOIDED` (admin), `COMPLETED -> RETURNED` (parsial/penuh); antrean offline menambah keadaan klien `QUEUED -> SYNCING -> SYNCED | FAILED`.
+
+**Peristiwa.** Diproduksi: `Sale.Completed` (target `sales.sale.completed`), `Product.LowStock` secara tidak langsung. Dikonsumsi: target loyalitas (06) dan hipotesis INT-3 (platform).
+
+### 4.05 SUP (pemasok dan PO)
+
+| ID | Requirement | Prioritas | Status | Bukti |
+|---|---|---|---|---|
+| FR-POS-05.1 | Menambah pemasok (nama, kontak, telepon, email, alamat) | M | Selesai | `apps/api/services/supplier/application/commands/add_supplier.go` |
+| FR-POS-05.2 | Daftar pemasok per tenant (tanpa yang dihapus lunak) | M | Selesai | `apps/api/services/supplier/http.go` |
+| FR-POS-05.3 | Membuat PO untuk satu pemasok dengan item (produk, kuantitas, biaya satuan); pemasok divalidasi, produk divalidasi milik tenant | M | Sebagian | `apps/api/services/supplier/application/commands/create_purchase_order.go` |
+| FR-POS-05.4 | Daftar PO dan get PO lewat REST | S | Sebagian | `apps/api/services/supplier/http.go` |
+| FR-POS-05.5 | Menerima stok atas PO: menambah stok setiap item tepat sekali, atomik, idempoten | M | Sebagian | `apps/api/services/supplier/application/commands/receive_stock.go`; `apps/api/services/supplier/application/commands/receive_stock_test.go` |
+| FR-POS-05.6 | Penerimaan parsial (`quantity_received` per item) dan pembatalan PO (`CANCELLED`) | S | Belum | `apps/api/services/supplier/application/commands/receive_stock.go` |
+| FR-POS-05.7 | Peristiwa `Inventory.Replenished` setelah penerimaan, dikonsumsi notifikasi/analitik | S | Sebagian | `apps/api/services/supplier/infrastructure/event_publisher.go` |
+
+**Aturan bisnis**
+
+- PO baru berstatus `PENDING`; harus memiliki minimal satu item dengan kuantitas > 0 dan `product_id` valid. As-is tidak memeriksa bahwa produk ada atau milik tenant (`create_purchase_order.go`).
+- Penerimaan as-is (`receive_stock.go`): `ReceiveOrder` mencatat baris penerimaan, stok toko, dan status `RECEIVED` dalam satu transaksi dan menolak pesanan yang bukan `PENDING`, sehingga retry tidak menambah stok dua kali; event Dragonfly `Inventory.Replenished` diterbitkan sesudahnya, best-effort (`apps/api/services/supplier/application/commands/receive_stock.go`).
+- Status PO di skema: `PENDING`, `RECEIVED`, `CANCELLED`; tidak ada RPC pembatalan.
+- Kolom `quantity_received` ada tetapi tidak membentuk status parsial.
+- `unit_cost` `NUMERIC(12,2)`.
+
+**Mesin keadaan (PO).**
+
+| Dari | Peristiwa | Ke | Status as-is |
+|---|---|---|---|
+| `PENDING` | terima barang | `RECEIVED` | Selesai (tanpa parsial) |
+| `PENDING` | batalkan | `CANCELLED` | Belum (tanpa RPC) |
+| `PENDING` | terima sebagian | `PARTIAL` (target) | Belum |
+| `PARTIAL` | terima sisa | `RECEIVED` (target) | Belum |
+
+**Peristiwa.** Diproduksi: `Inventory.Replenished` (target `supplier.stock.received`). Dikonsumsi: tidak ada.
+
+### 4.06 CUS (pelanggan dan loyalitas)
+
+| ID | Requirement | Prioritas | Status | Bukti |
+|---|---|---|---|---|
+| FR-POS-06.1 | Membuat pelanggan (nama, telepon, email) | M | Selesai | `apps/api/services/customer/application/commands/create_customer.go`; `apps/api/services/customer/application/commands/create_customer_test.go` |
+| FR-POS-06.2 | Mengambil dan mendaftar pelanggan lewat REST | S | Sebagian | `apps/api/services/customer/http.go`; `apps/api/services/customer/http.go` |
+| FR-POS-06.3 | Poin loyalitas ditambahkan otomatis setelah penjualan berpelanggan berhasil di-commit, tepat satu kali per `sale_id` | M | Belum | `apps/api/services/customer/application/commands/add_loyalty_points.go`; `apps/api/services/customer/http.go` |
+| FR-POS-06.4 | Aturan perolehan (laju per nilai belanja) dan penukaran poin sesuai D-POS-05 | S | Belum | `apps/api/services/customer/application/commands/add_loyalty_points.go` |
+| FR-POS-06.5 | Peristiwa `Customer.New` dipublikasikan setelah pelanggan dibuat | C | Sebagian | `apps/api/services/customer/infrastructure/event_publisher.go` |
+| FR-POS-06.6 | Kasir melampirkan pelanggan pada penjualan dan struk di UI | S | Belum | `apps/cashier/src/routes/(app)/pos/+page.svelte` |
+
+**Aturan bisnis**
+
+- Poin hanya bertambah setelah penjualan berhasil (PRD §13). **As-is tidak terpenuhi:** `AddLoyaltyPoints` (`apps/api/services/customer/application/commands/add_loyalty_points.go`) tidak memiliki pemanggil di paket sales, dan tidak ada konsumen stream `pos:events` di seluruh kode (ADR-0002).
+- Handler loyalitas membaca total lalu memasukkan baris pada transaksi terpisah (balapan); `loyalty_points.sale_id` tidak `UNIQUE` sehingga tidak idempoten (dibaca statis) [INFERENCE].
+- Aturan perolehan tidak terdefinisi (pemanggil menyuplai jumlah poin); tidak ada penukaran, kedaluwarsa, atau tingkat.
+- Data pelanggan (nama, telepon, email) adalah data pribadi, disimpan teks biasa (bagian 8).
+- Target: konsumen outbox dalam proses menerapkan poin dalam transaksi sendiri, kunci `UNIQUE(tenant_id, sale_id)`.
+
+**Mesin keadaan.** Pelanggan: `aktif` / `nonaktif` / `dihapus` (soft delete). Poin: buku besar tambah-saja (`points`, `total_points`).
+
+**Peristiwa.** Diproduksi: `Customer.New` (target `customer.created`). Dikonsumsi: target `sales.sale.completed`.
+
+### 4.07 RPT (laporan)
+
+| ID | Requirement | Prioritas | Status | Bukti |
+|---|---|---|---|---|
+| FR-POS-07.1 | Laporan penjualan per rentang tanggal: pendapatan total dan jumlah transaksi, per toko dan per tenant | M | Sebagian | `apps/api/services/sales/infrastructure/postgres/sale_repository.go`; `apps/api/services/sales/http.go` |
+| FR-POS-07.2 | Produk teratas dengan nama produk dan unit terjual | M | Sebagian | `apps/api/services/sales/infrastructure/postgres/sale_repository.go` |
+| FR-POS-07.3 | Bauran metode pembayaran dihitung dari data penjualan nyata | S | Belum | `apps/admin/src/routes/(app)/dashboard/+page.svelte` |
+| FR-POS-07.4 | Dashboard hanya menampilkan data nyata; nama field cocok dengan kontrak API | M | Sebagian | `apps/admin/src/routes/(app)/dashboard/+page.svelte`; `apps/admin/src/routes/(app)/reports/+page.svelte` |
+| FR-POS-07.5 | Batas hari laporan mengikuti zona waktu WIB (atau toko, D-POS-14) | S | Belum | `apps/api/services/sales/infrastructure/postgres/sale_repository.go` |
+| FR-POS-07.6 | Cakupan laporan tingkat tenant dapat dipilih admin tanpa konteks toko | S | Sebagian | `apps/api/services/sales/http.go` |
+
+**Aturan bisnis**
+
+- Semua kueri laporan menghormati cakupan tenant dan toko (PRD §13); kueri repositori mendukung cakupan toko maupun tenant, tetapi middleware `Store` gateway mewajibkan konteks toko untuk semua rute sehingga cakupan tenant tidak dapat dipakai lewat REST (dibaca statis) [INFERENCE].
+- `product_name` pada produk teratas selalu `''`: SQL menulis `'' AS product_name` untuk kueri toko dan tenant tanpa join ke produk (`sale_repository.go`).
+- Kontrak tidak cocok: UI dashboard mengharapkan `total_sales`, `top_products[].name`, `.quantity`; backend mengembalikan `transaction_count`, `product_id`, `product_name`, `units_sold` (`docs/adr/0001-single-module-go-api-on-sela-stack.md`).
+- Dashboard memalsukan data: bauran pembayaran (jatuh balik ke 55/30/15 dari `total_revenue`), batang sparkline sintetis (tujuh batang berbobot tetap), dan default float kas (`opening_float` 500.000) (`apps/admin/src/routes/(app)/dashboard/+page.svelte`, baris 44-68).
+- `payment_method` tidak tersimpan sehingga bauran pembayaran tidak dapat dihitung.
+
+**Peristiwa.** Diproduksi: tidak ada. Dikonsumsi: tidak ada (target: laporan membaca langsung dari tabel penjualan).
+
+### 4.08 NTF (notifikasi): Belum
+
+Tidak ada layanan notifikasi (PRD §10.2 mendaftarkan `NotificationService`, §14.3 mensyaratkan admin menerima notifikasi stok rendah). Peristiwa `Product.LowStock` diterbitkan tetapi tidak ada konsumen (Belum; `docs/adr/0002-dragonfly-streams-replace-nats-jetstream.md`). Tabel `notifications` pada PRD §12 tidak ada di migrasi.
+
+Alasan ditunda: PRD §18 menempatkan notifikasi pada Phase 2, dan mode `suite` mendelegasikan pengiriman ke hub notifikasi platform lewat port `Notification.Enqueue(ctx, tx, msg)`. Pada mode `standalone`, adapter lokal menulis baris `notifications`/outbox yang dikirim worker ticker (kanal `tbd`). Tidak ada FR POS pada dokumen ini; kebutuhan bisnis BR-POS-17 dipetakan ke FR-POS-03.5 dan modul ini. Saat dikerjakan, FR akan ditambahkan pada revisi FSD.
+
+### 4.09 AI (peramalan permintaan): Belum
+
+Tidak ada layanan AI (`ai-service` tidak ada) dan tidak ada event atau penerbit `AI.OrderForecasted` di kode (`docs/adr/0002-dragonfly-streams-replace-nats-jetstream.md`). `POST /api/ai/forecast-demand` pada PRD §11.2 tidak ada di API.
+
+Alasan ditunda: PRD §18 menempatkan peramalan dan rekomendasi pada Phase 2 dan harga dinamis, pengenalan gambar, serta chat pada Phase 3 (koreksi atas anggapan bahwa seluruh AI = Phase 3, lihat 11.3); prasyaratnya adalah riwayat penjualan yang andal (bagian 7.1) dan buku besar stok (FR-POS-03.3). Tidak ada FR POS pada dokumen ini; BR-POS-18 ditandai Could.
+
+### 4.SEC Keamanan lintas modul
+
+| ID | Requirement | Prioritas | Status | Bukti |
+|---|---|---|---|---|
+| FR-POS-SEC.1 | RLS `ENABLE` + `FORCE` pada seluruh tabel bertenant dengan kebijakan `tenant_isolation` | M | Selesai | `apps/api/internal/db/migrations/0041_sales_create_sales_schema.sql`; `apps/api/internal/db/migrations/0031_inventory_create_schema.sql` |
+| FR-POS-SEC.2 | Setiap kebijakan RLS memiliki `WITH CHECK` (7 dari 15 belum) | M | Sebagian | `apps/api/internal/db/migrations/0061_customer_schema.sql`; `apps/api/internal/db/migrations/0051_supplier_create_schema.sql` |
+| FR-POS-SEC.3 | Cakupan toko ditegakkan pada RLS lewat `app.store_id` untuk tabel berkolom `store_id` | S | Belum | `stery-kit/go/pgtenant/pgtenant.go` |
+| FR-POS-SEC.4 | Konteks tenant per transaksi bekerja pada PostgreSQL nyata dan dibuktikan tes integrasi lintas-tenant | M | Pending Verification | `stery-kit/go/pgtenant/pgtenant.go` |
+| FR-POS-SEC.5 | Autentikasi layanan-ke-layanan deny-by-default (tanpa token = ditolak), tanpa refleksi gRPC pada produksi | M | Sebagian | `docs/adr/0001-single-module-go-api-on-sela-stack.md` (tidak ada gRPC antar-layanan dan tidak ada server gRPC tersisa; gRPC klien mesin belum dibangun) |
+| FR-POS-SEC.6 | Tidak ada rahasia pada berkas yang dilacak git; rahasia dirotasi dan dibersihkan dari riwayat | M | Sebagian | `ecosystem.config.cjs` (membaca `.env`, tanpa rahasia literal); `.env.example` [INFERENCE: pembersihan riwayat dan rotasi belum terbukti] |
+| FR-POS-SEC.7 | Jejak audit append-only untuk aksi sensitif (login, perubahan harga, penyesuaian stok, void, pengguna) | S | Belum | `apps/api/internal/db/migrations/0011_auth_schema.sql` |
+| FR-POS-SEC.8 | Data pribadi pelanggan (nama, telepon, email) dilindungi sesuai keputusan UU PDP (enkripsi `kit/piicrypt` + blind index bila diputuskan) | S | Belum | `apps/api/internal/db/migrations/0061_customer_schema.sql` |
+| FR-POS-SEC.9 | Batas ukuran badan dan batas laju pada API | S | Selesai | `apps/api/cmd/api/routes.go` |
+| FR-POS-SEC.10 | Sesi web hanya pada cookie HttpOnly; tidak ada token di `localStorage` | S | Sebagian | `apps/admin/src/lib/server/session.ts` |
+
+**Aturan bisnis**
+
+- Seluruh akses data bisnis berada pada transaksi dengan konteks tenant; hanya mekanisme `WithTenantContext` yang ada: `SET LOCAL app.tenant_id = $1; SET LOCAL app.store_id = $2` (`stery-kit/go/pgtenant/pgtenant.go`). PostgreSQL tidak menerima parameter terikat pada `SET` dan menolak banyak perintah dalam satu pernyataan siap pakai, sehingga pola ini kemungkinan gagal pada koneksi nyata [INFERENCE]; tidak ada tes integrasi, jadi status Pending Verification dan target memakai `set_config(..., true)`.
+- Tidak ada kebijakan RLS yang merujuk `app.store_id`; cakupan toko hanya di lapisan aplikasi (kontradiksi dengan README/CLAUDE.md, 11.3).
+- Tujuh kebijakan tanpa `WITH CHECK`: `customer.loyalty_points`, `inventory.stock_thresholds`, `product.categories`, `sales.sale_items`, `sales.receipts`, `supplier.purchase_orders`, `supplier.purchase_order_items`. [INFERENCE] PostgreSQL memakai `USING` sebagai pemeriksaan untuk kebijakan `FOR ALL` bila `WITH CHECK` dihilangkan, sehingga celahnya terutama eksplisitas, bukan kebocoran terbukti.
+- `auth.audit_logs` ada tetapi tidak ada kode yang menulis dan tidak ada trigger append-only.
+- Tidak ada server gRPC yang berjalan, sehingga tidak ada refleksi gRPC (ADR-0001).
+
+**Mesin keadaan.** Tidak berlaku.
+
+**Peristiwa.** Diproduksi: target `audit` lewat `Audit.Record`. Dikonsumsi: tidak ada.
+
+---
+
+## 5. Model Data
+
+Skema as-is: `auth`, `product`, `inventory`, `sales`, `supplier`, `customer`. Peran database as-is `pos_admin` (BYPASSRLS, dipakai migrasi) dan `pos_app` (`apps/api/internal/db/migrations/0011_auth_schema.sql`; peran dibuat pada `apps/api/internal/db/migrations/0001_bootstrap.sql`). Semua primary key UUID dengan `gen_random_uuid()` (target `uuidv7()`). Kolom PII: kelas `PII` = data pribadi, `Rahasia` = kredensial, `-` = bukan PII.
+
+### 5.1 Entitas as-is
+
+| Skema.Tabel | Kolom kunci | RLS | Kelas PII |
+|---|---|---|---|
+| `auth.tenants` | `id`, `name`, `slug` (UNIQUE), `is_active`, `deleted_at` | tidak ada RLS (komentar migrasi: akses dikendalikan lapisan aplikasi lewat peran `pos_superadmin`; peran itu hanya disebut pada komentar, tidak didefinisikan di `services`, `deploy`, atau `scripts`) | - |
+| `auth.stores` | `id`, `tenant_id`, `name`, `address`, `phone`, `is_active`, `deleted_at` | `ENABLE`+`FORCE`, `tenant_isolation` dengan `WITH CHECK` | alamat/telepon toko: data bisnis |
+| `auth.roles` | `id`, `name` (UNIQUE; di-seed `admin`, `cashier`, `stock_manager`), `description` | tidak ada RLS | - |
+| `auth.users` | `id`, `tenant_id`, `email`, `password_hash` (bcrypt), `name`, `is_active`, `deleted_at`; `UNIQUE(tenant_id, email)` | `ENABLE`+`FORCE` dengan `WITH CHECK` | email dan nama: PII; `password_hash`: Rahasia |
+| `auth.user_roles` | `user_id`, `role_id`, `store_id` (NULL = semua toko, non-NULL = terikat toko, mis. kasir), `tenant_id`; unik per (pengguna, peran, tenant, toko) | `ENABLE`+`FORCE` dengan `WITH CHECK` | - |
+| `auth.audit_logs` | `id`, `tenant_id`, `user_id`, `action`, `entity`, `entity_id`, `metadata JSONB`, `created_at` | tidak ada RLS; komentar menyebut "append-only" tetapi tidak ada trigger; tidak ada kode yang menulis | `metadata`: `tbd` |
+| `auth.refresh_tokens` | `id`, `user_id`, `tenant_id`, `family_id`, `token_hash` (UNIQUE, SHA-256), `issued_at`, `expires_at`, `revoked_at`, `replaced_by`, `user_agent`, `ip_address` | tidak ada RLS (disengaja, pencarian lewat hash sebelum tenant diketahui) | `ip_address` dan `user_agent`: PII terkait; hash token: Rahasia |
+| `product.categories` | `id`, `tenant_id`, `name` | `ENABLE`+`FORCE`, tanpa `WITH CHECK` | - |
+| `product.products` | `id`, `tenant_id`, `category_id`, `name`, `sku`, `barcode`, `base_price`, `sale_price`, `unit`, `is_active`, `deleted_at`; `UNIQUE(tenant_id, sku)` | `ENABLE`+`FORCE` | - |
+| `inventory.stock_items` | `tenant_id`, `store_id`, `product_id`, `quantity BIGINT`; `UNIQUE(tenant_id, store_id, product_id)` | `ENABLE`+`FORCE` | - |
+| `inventory.stock_thresholds` | `tenant_id`, `store_id`, `product_id`, `min_quantity` | `ENABLE`+`FORCE`, tanpa `WITH CHECK` | - |
+| `sales.sales` | `id`, `tenant_id`, `store_id`, `cashier_id`, `customer_id`, `subtotal`, `discount_amount`, `total`, `status` (default `COMPLETED`), `notes`, `completed_at` | `ENABLE`+`FORCE` | - (`customer_id` rujukan) |
+| `sales.sale_items` | `sale_id`, `tenant_id`, `product_id`, `quantity INT`, `unit_price`, `discount`, `line_total` | `ENABLE`+`FORCE`, tanpa `WITH CHECK` | - |
+| `sales.receipts` | `sale_id UNIQUE`, `tenant_id`, `store_id`, `snapshot JSONB`, `issued_at` | `ENABLE`+`FORCE`, tanpa `WITH CHECK` | snapshot mungkin memuat nama kasir `tbd` |
+| `supplier.suppliers` | `id`, `tenant_id`, `name`, `contact`, `phone`, `email`, `address`, `deleted_at` | `ENABLE`+`FORCE` | PII bisnis (kontak pemasok) |
+| `supplier.purchase_orders` | `id`, `tenant_id`, `store_id`, `supplier_id`, `status` (`PENDING`/`RECEIVED`/`CANCELLED`), `notes` | `ENABLE`+`FORCE`, tanpa `WITH CHECK` | - |
+| `supplier.purchase_order_items` | `purchase_order_id`, `tenant_id`, `product_id`, `quantity_ordered`, `quantity_received`, `unit_cost` | `ENABLE`+`FORCE`, tanpa `WITH CHECK` | - |
+| `customer.customers` | `id`, `tenant_id`, `name`, `phone`, `email`, `is_active`, `deleted_at` | `ENABLE`+`FORCE` | PII (nama, telepon, email) |
+| `customer.loyalty_points` | `customer_id`, `tenant_id`, `points`, `total_points`, `sale_id` (tidak `UNIQUE`) | `ENABLE`+`FORCE`, tanpa `WITH CHECK` | - |
+
+Tabel PRD §12 yang tidak ada: `notifications`, `ai_forecasts`, `permissions`. Bukti kolom: satu seri goose di `apps/api/internal/db/migrations/` (`0011`-`0065`); fungsi `auth.resolve_login_tenant` pada `apps/api/internal/db/migrations/0013_auth_login_tenant_resolver.sql`.
+
+### 5.2 Tambahan target
+
+| Entitas | Kolom/perubahan | Alasan |
+|---|---|---|
+| `sales.sales` | `client_sale_id UUID`, `UNIQUE(tenant_id, store_id, client_sale_id)`, `tax_amount`, `payment_method`, `tax_basis` (`tbd`) | idempotensi, PPN, metode pembayaran |
+| `sales.sale_items` | `store_id`, `tax_amount` (`tbd`), kunci asing ke `sales.sales` dalam kebijakan `app.store_id` | RLS toko |
+| `inventory.stock_items` | `CHECK (quantity >= 0)` | stok non-negatif |
+| `inventory.stock_movements` | `id`, `tenant_id`, `store_id`, `product_id`, `delta`, `reason`, `ref_type`, `ref_id`, `actor_id`, `created_at` (append-only) | buku besar |
+| `customer.loyalty_points` | `UNIQUE(tenant_id, sale_id)` | idempoten |
+| `outbox`, `processed_events` | `event_id`, `event_type`, `payload`, `tenant_id`, `store_id`, `created_at`, `published_at`/`processed_at` | D6 |
+| `audit_logs` | `kit/audit`, trigger menolak UPDATE/DELETE/TRUNCATE | FR-POS-SEC.7 |
+| `auth.devices` | `id`, `tenant_id`, `store_id`, `label`, `registered_at`, `last_seen_at`, `revoked_at` | `pos.devices.max` [INFERENCE] |
+| `auth.stores` | `external_ref` (suite), `org_id` (mode `suite`) | tautan organisasi platform |
+| `auth.users` | `external_subject` (mode `suite`) | tautan identitas platform |
+| seluruh tabel bertenant | `WITH CHECK` pada setiap kebijakan, kebijakan `app.store_id` pada tabel berkolom `store_id` | G4 |
+
+---
+
+## 6. Spesifikasi API
+
+### 6.1 REST as-is (gateway chi, 14 rute bisnis)
+
+Respons as-is memakai amplop `{success,data,error}` lewat `stery-kit/go/httpx` pada rute `/api/v1` (ADR-0001). JWT dibaca dari header `Authorization: Bearer` atau cookie `pos_token`; konteks toko dari klaim `sid` atau header `X-Store-ID` (`apps/api/services/auth/auth.go`). Baris rute di bawah mempertahankan 14 nama rute semula; jalur as-is kini berprefiks `/api/v1`.
+
+| Rute as-is | RPC | Peran | Status | Bukti |
+|---|---|---|---|---|
+| `POST /api/login` | `AuthService.Login` | publik | Selesai | `apps/api/services/auth/http.go` |
+| `POST /api/logout` | `AuthService.Logout` | admin, cashier | Selesai | `apps/api/services/auth/http.go` |
+| `GET /api/products` | `ProductService.SearchProducts` (hanya `q`) | admin, cashier | Sebagian | `apps/api/services/product/http.go` |
+| `POST /api/products` | `CreateProduct` | admin | Selesai | `apps/api/services/product/http.go` |
+| `PUT /api/products/{id}` | `UpdateProduct` | admin | Selesai | `apps/api/services/product/http.go` |
+| `GET /api/inventory` | `ListItems` | admin, stock_manager | Selesai | `apps/api/services/inventory/http.go` |
+| `POST /api/inventory` | `AddItem` | admin, stock_manager | Selesai | `apps/api/services/inventory/http.go` |
+| `POST /api/sales` | `CreateSale` | cashier | Sebagian | `apps/api/services/sales/http.go` |
+| `GET /api/sales/report` | `GetSalesReport` | admin | Sebagian | `apps/api/services/sales/http.go` |
+| `GET /api/suppliers` | `ListSuppliers` | admin, stock_manager | Selesai | `apps/api/services/supplier/http.go` |
+| `POST /api/suppliers` | `AddSupplier` | admin | Selesai | `apps/api/services/supplier/http.go` |
+| `POST /api/purchase-orders` | `CreatePurchaseOrder` | admin, stock_manager | Selesai | `apps/api/services/supplier/http.go` |
+| `GET /api/customers` | `ListCustomers` | admin, cashier | Selesai | `apps/api/services/customer/http.go` |
+| `POST /api/customers` | `CreateCustomer` | admin, cashier | Selesai | `apps/api/services/customer/http.go` |
+| `GET /healthz`, `GET /readyz` | - | publik | Selesai | `apps/api/cmd/api/routes.go` |
+
+Proto tidak ada lagi, sehingga anotasi `google.api.http` dan rute `/v1/...` yang lama hilang (ADR-0001); rute REST yang didaftarkan di `apps/api/services/*/http.go` adalah kontraknya. PRD §11.2 mencantumkan `POST /api/ai/forecast-demand` yang tidak ada di kode.
+
+### 6.2 Paritas REST dengan operasi modul (butir gerbang G2)
+
+28 RPC dihapus bersama server gRPC; permukaan REST dipasang di `apps/api/cmd/api/routes.go`. Target: paritas penuh dengan operasi modul, prefiks `/api/v1`.
+
+| Modul | Operasi (RPC) | REST as-is | Rute target `/api/v1` | Gerbang G2 |
+|---|---|---|---|---|
+| 01 | `Login` | `POST /api/login` | `POST /api/v1/auth/login` | terpenuhi (pindah rute) |
+| 01 | `Logout` | `POST /api/logout` | `POST /api/v1/auth/logout` | terpenuhi (pindah rute) |
+| 01 | `Refresh` | tidak ada | dihapus (sesi opaque, FR-POS-01.10) | digantikan |
+| 01 | `LogoutAll` | tidak ada | `POST /api/v1/auth/logout-all` | belum |
+| 01 | `ListSessions` | tidak ada | `GET /api/v1/auth/sessions` | belum |
+| 01 | `Validate` | tidak ada (internal) | internal (`Identity.Verify`) | n/a |
+| 01 | `ValidateStore` | tidak ada (dipakai gateway) | internal (atribut sesi `store_id`) | n/a |
+| 01 | provisioning tenant/toko/pengguna | tidak ada | `POST /api/v1/stores`, `POST /api/v1/users` dst. (`tbd`, D-POS-12) | belum |
+| 02 | `CreateProduct`, `UpdateProduct`, `SearchProducts` | ada (sebagian parameter) | `POST/PUT/GET /api/v1/products` | pindah rute |
+| 02 | `GetProduct` | tidak ada | `GET /api/v1/products/{product_id}` | belum |
+| 03 | `AddItem`, `ListItems` | ada | `POST/GET /api/v1/inventory` | pindah rute |
+| 03 | `GetItem` | tidak ada | `GET /api/v1/inventory/{product_id}` | belum |
+| 03 | `UpdateStock` | tidak ada | `PATCH /api/v1/inventory/{product_id}/stock` | belum |
+| 03 | `SetThreshold` | tidak ada | `PUT /api/v1/inventory/{product_id}/threshold` | belum |
+| 04 | `CreateSale` | ada (field terbatas) | `POST /api/v1/sales` | pindah rute |
+| 04 | `GetSale` | tidak ada | `GET /api/v1/sales/{sale_id}` | belum |
+| 07 | `GetSalesReport` | ada | `GET /api/v1/sales/report` | pindah rute |
+| 05 | `AddSupplier`, `ListSuppliers`, `CreatePurchaseOrder` | ada | `POST/GET /api/v1/suppliers`, `POST /api/v1/purchase-orders` | pindah rute |
+| 05 | `ListPurchaseOrders` | tidak ada | `GET /api/v1/purchase-orders` | belum |
+| 05 | `ReceiveStock` | tidak ada | `POST /api/v1/purchase-orders/{purchase_order_id}/receive` | belum |
+| 06 | `CreateCustomer`, `ListCustomers` | ada | `POST/GET /api/v1/customers` | pindah rute |
+| 06 | `GetCustomer` | tidak ada | `GET /api/v1/customers/{customer_id}` | belum |
+| 06 | `AddLoyaltyPoints` | tidak ada | tidak terekspos: dipanggil dalam proses (FR-POS-06.3); tampilan poin `GET /api/v1/customers/{customer_id}` | digantikan |
+
+### 6.3 Kontrak REST target
+
+- Prefiks `/api/v1` pada ServeMux stdlib; amplop `{success, data, error}` (`kit/httpx`); galat internal berpesan generik tetap; pembatasan dengan `RequirePermission(code)`.
+- Sesi lewat cookie HttpOnly; tanpa CORS (web dan API satu origin lewat reverse proxy, seperti SELA).
+- `POST /api/v1/sales` menerima `client_sale_id` (header `Idempotency-Key` atau badan; bentuk final `tbd`), `customer_id?`, `items[{product_id, quantity, discount?}]`, `payment_method` (`tbd`), `notes?`; `unit_price` TIDAK diterima dari klien. Respons: penjualan + struk.
+- Paginasi `limit`/`offset` konsisten pada semua daftar (as-is hanya `q` yang diteruskan pada pencarian produk).
+- Rute tingkat toko mensyaratkan atribut sesi `store_id`.
+
+### 6.4 Kontrak gRPC
+
+| Layanan | Berkas proto lama | RPC | Status | Bukti |
+|---|---|---|---|---|
+| `pos.auth.v1.AuthService` | dihapus (ADR-0001) | 7: `Login`, `Validate`, `Logout`, `Refresh`, `LogoutAll`, `ListSessions`, `ValidateStore` | Selesai | `apps/api/services/auth/http.go` |
+| `pos.product.v1.ProductService` | dihapus (ADR-0001) | 4 | Selesai | `apps/api/services/product/http.go` |
+| `pos.inventory.v1.InventoryService` | dihapus (ADR-0001) | 5: `AddItem`, `UpdateStock`, `ListItems`, `GetItem`, `SetThreshold` | Selesai | `apps/api/services/inventory/http.go` |
+| `pos.sales.v1.SalesService` | dihapus (ADR-0001) | 3 | Selesai | `apps/api/services/sales/http.go` |
+| `pos.supplier.v1.SupplierService` | dihapus (ADR-0001) | 5 | Selesai | `apps/api/services/supplier/http.go` |
+| `pos.customer.v1.CustomerService` | dihapus (ADR-0001) | 4 | Selesai | `apps/api/services/customer/http.go` |
+
+Catatan: bagian ini bersifat historis. Keenam layanan gRPC dan proto-nya dihapus (ADR-0001); `DeductStock` dan `RestoreStock` kini metode pembungkus dalam proses pada sales yang memanggil `UpdateStockHandler` inventory dengan delta kuantitas negatif atau positif (`apps/api/services/sales/infrastructure/inventory_port.go`). Target: gRPC hanya untuk klien mesin (`api/proto/v1`, `buf`, `gen/go` ter-commit, `scripts/proto-gen.sh --check`) dengan interseptor deny-by-default; antar-modul memakai interface Go.
+
+---
+
+## 7. Alur Proses Kritis
+
+### 7.1 Penjualan sebagai satu transaksi database (menggantikan saga gRPC)
+
+**As-is (saga).**
+
+1. Middleware authn memverifikasi JWT, `RequireStore` menentukan `tenant_id`, `store_id`, `cashier_id`, lalu handler `CreateSale` berjalan (peran `cashier`).
+2. `create_sale.go` memvalidasi masukan dan menghitung subtotal, diskon, total dari harga katalog (dicari di server) dan diskon yang dikirim klien (tidak negatif, dibatasi jumlah baris dan subtotal).
+3. Untuk setiap item, `inventory.DeductStock` dipanggil dalam proses (dulu lewat gRPC); kegagalan di tengah memicu `compensate()` (`RestoreStock`, hanya peringatan log bila gagal).
+4. `saleRepo.Create` menulis penjualan, item, dan struk dalam satu transaksi.
+5. `PublishSaleCompleted` ke stream Dragonfly `pos:events` (ADR-0002), best-effort.
+6. Loyalitas tidak dipanggil. Tidak ada kunci idempotensi.
+
+Kegagalan yang mungkin: proses mati antara langkah 3 dan 4 (stok berkurang tanpa penjualan); retry setelah timeout (penjualan ganda atau stok terpotong ganda); `RestoreStock` gagal (stok hilang).
+
+**Target.**
+
+1. Klien mengirim `POST /api/v1/sales` dengan `client_sale_id` (UUID dibuat di perangkat), item (tanpa harga), `customer_id?`, `payment_method?`.
+2. `kit/tenantdb.WithTenant(ctx, tenantID, scope tenant+store, fn)` membuka transaksi, mengatur `app.tenant_id` dan `app.store_id` lewat `set_config(..., true)`.
+3. Dalam transaksi: `INSERT ... ON CONFLICT (tenant_id, store_id, client_sale_id) DO NOTHING`; bila konflik, kembalikan penjualan yang sudah ada (idempoten).
+4. Harga satuan dibaca dari `product.products`; diskon divalidasi terhadap wewenang peran (D-POS-07); PPN dihitung (D-POS-01); total dihitung dengan representasi uang eksak.
+5. Untuk setiap item: `UPDATE inventory.stock_items SET quantity = quantity - $q WHERE ... AND quantity - $q >= 0`; nol baris = stok kurang -> transaksi dibatalkan dengan galat 409; tulis `stock_movements` (`reason = SALE`, `ref_id = sale_id`).
+6. Tulis `sales.sales`, `sales.sale_items`, `sales.receipts` (snapshot).
+7. Tulis baris outbox `sales.sale.completed` (dan `inventory.low_stock` bila melewati ambang) pada transaksi yang sama; `COMMIT`.
+8. Worker outbox dalam proses memberikan `sales.sale.completed` ke konsumen loyalitas (idempoten per `sale_id`, transaksi sendiri, `UNIQUE(tenant_id, sale_id)`); kegagalan loyalitas tidak menggagalkan penjualan dan diulang.
+
+Titik gagal: transaksi tunggal menghilangkan keadaan setengah jadi; retry aman lewat `client_sale_id`. Aturan bisnis: PRD §13 (stok non-negatif, atomik, struk wajib, poin hanya setelah penjualan). Pengujian wajib: dua penjualan serentak pada stok 1, retry dengan `client_sale_id` sama, lintas-tenant.
+
+### 7.2 Penerimaan PO
+
+**As-is** (`receive_stock.go`): `ReceiveOrder` menerapkan baris penerimaan, stok toko, dan status `RECEIVED` dalam satu transaksi dan menolak pesanan yang bukan `PENDING`; lalu `Inventory.Replenished` diterbitkan best-effort. Item di luar permintaan dilewati.
+
+**Target.**
+
+1. `POST /api/v1/purchase-orders/{id}/receive` dengan daftar `{product_id, quantity_received}` dan `Idempotency-Key`.
+2. Dalam satu transaksi tenant+store: kunci PO (`SELECT ... FOR UPDATE`); validasi status bukan `RECEIVED`/`CANCELLED`; setiap kuantitas <= `quantity_ordered - quantity_received`.
+3. Per item: tambah `quantity_received`; tambah stok (`stock_items` upsert) dan tulis `stock_movements` (`reason = RECEIPT`, `ref_id = po_id`).
+4. Status PO: semua item lengkap -> `RECEIVED`, sebagian -> `PARTIAL`.
+5. Tulis outbox `supplier.stock.received`; `COMMIT`.
+
+Hanya peran `admin` dan `stock_manager` (izin `purchase_orders:receive`, katalog `tbd`).
+
+### 7.3 Antrean kasir offline
+
+Status as-is: Belum. Service worker (`apps/cashier/src/service-worker.ts`) hanya menyimpan aset build (stale-while-revalidate, melewati non-GET dan `/api/`); `manifest.json` memiliki `start_url` `/pos` dan satu ikon; tidak ada antrean penjualan.
+
+**Target** (mengikuti pola antrean unggah tamu SELA: IndexedDB `queue`, mesin keadaan pengunggah, pemicu sinkron, kebijakan cache `policy.ts`; `SELA/apps/web/src/lib/pwa/policy.ts`):
+
+1. Service worker dengan scope `/cashier/` (`D9`), aset aplikasi dan katalog produk terakhir (hanya baca) di-cache.
+2. Saat offline, kasir menyelesaikan penjualan ke antrean IndexedDB dengan `client_sale_id` UUID; struk sementara ditandai "belum tersinkron".
+3. Saat jaringan kembali, pengunggah mengirim antrean berurutan lewat `POST /api/v1/sales` dengan `client_sale_id` (idempoten, 7.1).
+4. Status per penjualan antrean: `QUEUED -> SYNCING -> SYNCED | FAILED` (penolakan 409 stok kurang atau 422 harga: tampil di daftar "perlu tindakan" kasir/admin).
+5. Kebijakan konflik: stok kurang saat sinkron -> penjualan tetap sah (barang sudah terjual) dan stok ditandai selisih untuk admin; atau ditolak (keputusan D-POS-03, belum ditetapkan).
+6. Batas durasi offline, kapasitas antrean, dan pencatatan perangkat (`pos.devices.max`): `tbd`.
+7. Autentikasi offline: sesi kasir yang sudah ada tetap berlaku sampai kedaluwarsa; login baru memerlukan jaringan (`tbd`, D-POS-03).
+
+---
+
+## 8. Keamanan, Privasi dan UU PDP
+
+### 8.1 Model ancaman dan kontrol
+
+| Ancaman | Kontrol as-is | Status | Bukti | Target |
+|---|---|---|---|---|
+| Kebocoran lintas tenant | RLS `ENABLE`+`FORCE`, filter `tenant_id` pada kueri; 7 kebijakan tanpa `WITH CHECK`; tidak ada tes integrasi | Sebagian | `stery-kit/go/pgtenant/pgtenant.go` | RLS lengkap + `kit/tenantdb` + tes lintas-tenant (G4, G6) |
+| Pemalsuan layanan internal | interseptor HMAC `x-service-token` dihapus bersama server gRPC; tidak ada lagi batas layanan internal (ADR-0001) | Sebagian | `docs/adr/0001-single-module-go-api-on-sela-stack.md` | deny-by-default; gRPC klien mesin `tbd` |
+| Pencurian kredensial dari repo | tidak ada rahasia literal pada berkas terlacak (`ecosystem.config.cjs` membaca `.env`); riwayat belum dibersihkan, rotasi belum terbukti | Sebagian | `ecosystem.config.cjs` | rotasi, bersihkan riwayat, `.env.example` (G5) |
+| Pencurian sesi | JWT 10 menit di cookie httpOnly; daftar hitam `jti`; refresh 30 hari | Sebagian | `apps/api/services/auth/infrastructure/jwt/signer.go` | sesi opaque, hash di Dragonfly |
+| Brute force login | 20 per menit per IP; tidak ada kunci akun | Sebagian | `apps/api/cmd/api/main.go` | batas laju per akun dan alamat + lockout |
+| Eskalasi peran | `WithRole` per rute; tanpa katalog izin | Sebagian | `stery-kit/go/authn/authn.go` | `RequirePermission` |
+| Penipuan harga/diskon oleh klien | harga dan diskon dari klien diterima | Belum | `apps/api/services/sales/http.go` | harga dari server, batas wewenang |
+| Penjualan ganda | tidak ada kunci idempotensi | Belum | `apps/api/services/sales/application/commands/create_sale.go` | `client_sale_id` |
+| Penyangkalan aksi | `auth.audit_logs` tidak ditulis | Belum | `apps/api/internal/db/migrations/0011_auth_schema.sql` | `kit/audit` append-only |
+
+Transportasi gRPC antar-layanan dihapus (`docs/adr/0001-single-module-go-api-on-sela-stack.md`; menggantikan `docs/security/grpc-transport-security.md`); pada target tidak ada gRPC antar-layanan (satu proses), dan gRPC mesin memakai TLS di Caddy `tbd`.
+
+### 8.2 Data pribadi dan UU PDP
+
+| Data | Lokasi | Kelas | Status perlindungan | Bukti |
+|---|---|---|---|---|
+| Nama, telepon, email pelanggan | `customer.customers` | PII | teks biasa, tanpa enkripsi kolom | `apps/api/internal/db/migrations/0061_customer_schema.sql` |
+| Email pengguna (staf) | `auth.users` | PII | teks biasa | `apps/api/internal/db/migrations/0011_auth_schema.sql` |
+| Kata sandi | `auth.users.password_hash` | Rahasia | bcrypt | `apps/api/services/auth/application/commands/login.go` |
+| Kontak pemasok (nama, telepon, email) | `supplier.suppliers` | PII bisnis | teks biasa | `apps/api/internal/db/migrations/0051_supplier_create_schema.sql` |
+| Riwayat belanja pelanggan | `sales.sales.customer_id` | PII terkait | pseudonim per id | `apps/api/internal/db/migrations/0041_sales_create_sales_schema.sql` |
+
+- Tidak ada pernyataan UU PDP di repo `POS-Stery` (pencarian menyeluruh; tidak ada). Penerapan UU No. 27/2022 pada data pelanggan toko, dasar pemrosesan (persetujuan/kontrak), retensi, hak subjek data (akses, koreksi, hapus), notifikasi insiden, dan penunjukan penanggung jawab adalah keputusan terbuka D-POS-08 dan membutuhkan tinjauan hukum sebelum S2 ditutup. Dokumen ini tidak menyatakan kepatuhan.
+- Target teknis yang disiapkan: kolom PII dienkripsi dengan `kit/piicrypt` (AES-256-GCM, AAD per tujuan) disertai blind index untuk pencarian telepon/email bila diputuskan; penghapusan pelanggan memakai anonimisasi (riwayat penjualan dan poin dipertahankan tanpa PII); tabel audit append-only.
+- Struk bersifat dokumen transaksi; apakah snapshot boleh memuat data pelanggan ditentukan oleh keputusan D-POS-01 dan D-POS-08 (lihat BRD 9.3).
+
+### 8.3 Kebersihan rahasia dan rantai pasok
+
+- Berkas terlacak yang memuat rahasia (hanya jalur): tidak ada yang terkonfirmasi. `ecosystem.config.cjs` kini membaca rahasia dari `.env`; `deploy/docker/init-postgres.sql` dan `scripts/migrate-helper.sh` sudah tidak ada (tracker FR-POS-SEC.6: riwayat belum dibersihkan, rotasi belum terbukti). `docs/security/grpc-transport-security.md` menyebut nilai bawaan `changeme`.
+- Tidak dilacak git tetapi ada di disk kerja: `.env`, `keys/private.pem`, `keys/public.pem`, `server.exe`, `apps/*/build/` (diabaikan `.gitignore`; koreksi atas klaim baseline, lihat 11.3). Kunci JWT pribadi dipakai pada pengembangan lokal; pada target JWT dihapus.
+- Setelah rotasi, riwayat git perlu dibersihkan dan semua kredensial lama dianggap bocor (G5).
+- Dependensi Go: satu `go.mod` di `apps/api` sejak ADR-0001 (selisih versi antar layanan hilang).
+
+---
+
+## 9. Kebutuhan Non-Fungsional Teknis
+
+Seluruh angka kinerja dan kapasitas adalah `tbd` (tidak ada di repo, termasuk PRD yang hanya menyebut "high concurrency" tanpa angka); baseline hanya bila terhitung dari kode.
+
+| ID | Kebutuhan | Kategori | Target | Status as-is | Bukti |
+|---|---|---|---|---|---|
+| NFR-POS-01 | Waktu selesai penjualan (p95) per toko | Kinerja | `tbd` | Tidak diukur | `apps/api/services/sales/application/commands/create_sale.go` |
+| NFR-POS-02 | Jumlah kasir serentak per toko dan toko per tenant | Kapasitas | `tbd` (selaras `pos.stores.max`, `pos.devices.max`) | Tidak diukur | `apps/api/cmd/api/routes.go` |
+| NFR-POS-03 | Ketersediaan layanan API | Ketersediaan | `tbd` (SLA per tingkat) | Tidak ada pemantauan | `apps/api/cmd/api/routes.go` |
+| NFR-POS-04 | Penjualan atomik dan idempoten | Integritas | tanpa penjualan ganda, tanpa stok negatif | Tidak terpenuhi | `apps/api/services/sales/application/commands/create_sale.go` |
+| NFR-POS-05 | Isolasi tenant dan toko dibuktikan tes lintas-tenant per modul | Keamanan | 100% modul | Belum ada tes integrasi | `stery-kit/go/pgtenant/pgtenant.go` |
+| NFR-POS-06 | Cakupan tes minimal 80% (Go dan web), `-race` di CI | Kualitas | 80% | 79 fungsi tes unit berbasis stub, CI usang | `.github/workflows/ci.yml` |
+| NFR-POS-07 | Seluruh migrasi naik -> turun -> naik pada DB baru di CI | Kualitas | wajib | Hanya ada pemeriksaan versi unik (migrasi goose) | `apps/api/internal/db/migrate_versions_test.go` |
+| NFR-POS-08 | Konfigurasi lewat env fail-fast, rahasia tidak dicatat, `.env.example` tanpa nilai rahasia | Operasional | wajib | Sebagian | `apps/api/internal/config/config.go` |
+| NFR-POS-09 | Logging terstruktur `slog` JSON dan `/healthz`; metrik/tracing = D11 `tbd` | Observabilitas | `slog` + `/healthz` | `slog`; tidak ada metrik/tracing | `apps/api/cmd/api/routes.go` |
+| NFR-POS-10 | Ketahanan kasir offline: PWA scope `/cashier/`, antrean IndexedDB | Ketahanan | durasi offline `tbd` | Belum | `apps/cashier/src/service-worker.ts` |
+| NFR-POS-11 | Cadangan dan pemulihan Postgres | Operasional | RPO/RTO `tbd` | Tidak ada | `deploy/docker-compose.yml` |
+| NFR-POS-12 | Retensi data transaksi dan data pribadi | Kepatuhan | `tbd` (D-POS-08) | Tidak ada kebijakan | `apps/api/internal/db/migrations/0061_customer_schema.sql` |
+| NFR-POS-13 | Lokalisasi: Indonesia default, Inggris didukung, IDR, WIB; batas hari WIB | Kegunaan | wajib | UI Inggris; waktu DB sesi | `apps/cashier/src/routes/(app)/pos/+page.svelte` |
+| NFR-POS-14 | Aksesibilitas dan kegunaan layar kasir (target sentuh, kontras, keyboard/pemindai) | Kegunaan | `tbd` | Tidak dinilai | `apps/cashier/src/routes/(app)/pos/+page.svelte` |
+| NFR-POS-15 | Satu stack dan satu konvensi (STACK-SPEC) dengan perilaku `standalone` tidak berubah di mode `suite` | Maintainability | wajib | Menyimpang | `go.work` |
+| NFR-POS-16 | Degradasi aman saat platform tidak tersedia: snapshot entitlement 24 jam (dapat dikonfigurasi, `tbd`), gagal-tertutup untuk fitur berbayar, penjualan `standalone` tidak pernah diblokir | Ketahanan | 24 jam (`tbd`) | Belum ada mode `suite` | `apps/api/internal/config/config.go` |
+
+---
+
+## 10. Struktur Layar
+
+### 10.1 Layar as-is
+
+| Aplikasi | Layar | Fungsi | Status | Bukti |
+|---|---|---|---|---|
+| Admin | `(auth)/login` | login admin/stok | Selesai | `apps/admin/src/routes/(auth)/login/+page.svelte` |
+| Admin | `(app)/dashboard` | ringkasan: pendapatan, jumlah transaksi, produk teratas; bauran pembayaran dan sparkline palsu; nama field tidak cocok | Sebagian | `apps/admin/src/routes/(app)/dashboard/+page.svelte` |
+| Admin | `(app)/products` | daftar produk (hanya baca) | Sebagian | `apps/admin/src/routes/(app)/products/+page.svelte` |
+| Admin | `(app)/inventory` | daftar inventaris (hanya baca) | Sebagian | `apps/admin/src/routes/(app)/inventory/+page.svelte` |
+| Admin | `(app)/suppliers` | daftar pemasok (hanya baca) | Sebagian | `apps/admin/src/routes/(app)/suppliers/+page.svelte` |
+| Admin | `(app)/customers` | daftar pelanggan (hanya baca) | Sebagian | `apps/admin/src/routes/(app)/customers/+page.svelte` |
+| Admin | `(app)/reports` | laporan penjualan | Sebagian | `apps/admin/src/routes/(app)/reports/+page.svelte` |
+| Kasir | `(auth)/login` | login kasir; meminta Store ID (UUID) diketik | Sebagian | `apps/cashier/src/routes/(auth)/login/+page.svelte` |
+| Kasir | `(app)/pos` | cari produk, keranjang, tender (Tunai/QRIS/Debit hanya UI), struk | Sebagian | `apps/cashier/src/routes/(app)/pos/+page.svelte` |
+| Kasir | `(app)/receipts` | rute dihapus; riwayat struk belum dibangun (halaman penampung lama sudah tidak ada) | Belum | `apps/cashier/src/routes/(app)/pos/+page.svelte` |
+| Kedua | BFF `api/[...path]`, `auth/session` | proxy ke gateway, cookie sesi | Selesai | `apps/cashier/src/routes/auth/session/+server.ts` |
+| Kasir | Service worker + manifest | cache aset; tanpa antrean offline; `start_url` `/pos` | Sebagian | `apps/cashier/static/manifest.json` |
+
+Temuan UI (dibaca statis, `[INFERENCE]` untuk dampak runtime):
+
+- Tidak ada selektor toko admin dan tidak ada halaman admin yang mengirim `X-Store-ID`, sementara gateway mewajibkannya (403 "Store context required.") untuk peran admin: halaman admin kemungkinan tidak dapat memuat data (`apps/api/services/auth/auth.go`).
+- Tidak ada alur refresh token di web maupun gateway: JWT berumur 10 menit sementara cookie berumur 30 hari.
+- Helper `getToken`/`setSession` berbasis `localStorage` ada tetapi `setSession` tidak pernah dipanggil (kode mati).
+- Fallback URL BFF `http://localhost:8080` berbeda dari port bawaan gateway 8000.
+- Tampilan struk di kasir mengharapkan `{sale_id, total_amount, items_count}`, gateway mengembalikan `{sale: {...}, receipt: {...}}` sehingga struk menampilkan "—" dan 0 [INFERENCE].
+- Placeholder pencarian menyebut SKU yang tidak dicari.
+
+### 10.2 Struktur target (D9)
+
+Satu `apps/web` (SvelteKit SPA, `ssr=false`, `adapter-static`):
+
+| Route group | Halaman | Peran |
+|---|---|---|
+| `(auth)` | login (email + kata sandi; kasir memilih toko dari daftar yang ditugaskan, bukan mengetik UUID) | semua |
+| `(admin)` | dashboard, produk (buat/ubah/kategori/riwayat harga), inventaris (penyesuaian, ambang, pergerakan), pemasok, PO (buat/terima/batal), pelanggan, laporan, pengaturan toko dan pengguna, selektor toko | admin, stock_manager |
+| `(cashier)` | POS, riwayat dan cetak struk, antrean offline ("perlu tindakan") | cashier |
+
+Scope PWA `/cashier/`; `apiFetch` dengan `credentials: 'include'`; i18n `{id,en}` dengan tes paritas; komponen dari `packages/ui` dipindahkan.
+
+---
+
+## 11. Matriks Ketertelusuran dan Status
+
+### 11.1 Status per FR
+
+| ID | Prioritas | Status | Bukti |
+|---|---|---|---|
+| FR-POS-01.1 | M | Selesai | `apps/api/services/auth/application/commands/login.go` |
+| FR-POS-01.2 | M | Selesai | `apps/api/services/auth/application/commands/login.go` |
+| FR-POS-01.3 | M | Sebagian | `apps/api/services/auth/auth.go` |
+| FR-POS-01.4 | M | Sebagian | `apps/api/services/auth/application/commands/refresh.go` |
+| FR-POS-01.5 | S | Sebagian | `apps/api/services/auth/application/commands/logout.go` |
+| FR-POS-01.6 | M | Selesai | `stery-kit/go/authn/authn.go` |
+| FR-POS-01.7 | M | Selesai | `apps/api/cmd/api/routes.go` |
+| FR-POS-01.8 | M | Belum | `apps/api/services/auth/infrastructure/postgres/user_repository.go` |
+| FR-POS-01.9 | S | Belum | `apps/api/internal/db/migrations/0011_auth_schema.sql` |
+| FR-POS-01.10 | M | Belum | `apps/api/services/auth/infrastructure/jwt/signer.go` |
+| FR-POS-01.11 | S | Sebagian | `apps/admin/src/hooks.server.ts` |
+| FR-POS-01.12 | M | Belum | `apps/api/internal/config/config.go` |
+| FR-POS-01.13 | M | Belum | `apps/api/services/auth/infrastructure/postgres/store_repository.go` |
+| FR-POS-02.1 | M | Selesai | `apps/api/services/product/application/commands/create_product.go` |
+| FR-POS-02.2 | M | Sebagian | `apps/api/services/product/application/commands/update_product.go` |
+| FR-POS-02.3 | S | Sebagian | `apps/api/services/product/http.go` |
+| FR-POS-02.4 | M | Sebagian | `apps/api/services/product/infrastructure/postgres/product_repository.go` |
+| FR-POS-02.5 | S | Belum | `apps/api/services/product/application/commands/update_product.go` |
+| FR-POS-02.6 | S | Belum | `apps/api/internal/db/migrations/0021_product_schema.sql` |
+| FR-POS-02.7 | M | Belum | `apps/admin/src/routes/(app)/products/+page.svelte` |
+| FR-POS-03.1 | M | Selesai | `apps/api/services/inventory/application/commands/add_item.go` |
+| FR-POS-03.2 | M | Sebagian | `apps/api/services/inventory/infrastructure/postgres/stock_repository.go` |
+| FR-POS-03.3 | M | Belum | `apps/api/services/inventory/application/commands/update_stock.go` |
+| FR-POS-03.4 | M | Sebagian | `apps/api/services/inventory/application/commands/set_threshold.go` |
+| FR-POS-03.5 | M | Sebagian | `apps/api/services/inventory/infrastructure/publisher.go` |
+| FR-POS-03.6 | M | Sebagian | `apps/api/services/inventory/application/queries/list_items.go` |
+| FR-POS-03.7 | M | Belum | `apps/api/services/inventory/http.go` |
+| FR-POS-04.1 | M | Sebagian | `apps/api/services/sales/application/commands/create_sale.go` |
+| FR-POS-04.2 | M | Sebagian | `apps/api/services/sales/application/commands/create_sale.go` |
+| FR-POS-04.3 | M | Belum | `apps/api/services/sales/application/commands/create_sale.go` |
+| FR-POS-04.4 | M | Sebagian | `apps/api/services/sales/infrastructure/price_port.go` |
+| FR-POS-04.5 | M | Belum | `apps/api/services/sales/domain/sale.go` |
+| FR-POS-04.6 | S | Belum | `apps/cashier/src/routes/(app)/pos/+page.svelte` |
+| FR-POS-04.7 | M | Sebagian | `apps/api/services/sales/infrastructure/postgres/sale_repository.go` |
+| FR-POS-04.8 | M | Sebagian | `apps/api/services/sales/http.go` |
+| FR-POS-04.9 | M | Sebagian | `apps/api/services/sales/infrastructure/event_publisher.go` |
+| FR-POS-04.10 | M | Sebagian | `apps/cashier/src/routes/(app)/pos/+page.svelte` |
+| FR-POS-04.11 | C | Belum | `apps/api/services/sales/domain/sale.go` |
+| FR-POS-04.12 | S | Belum | `apps/cashier/src/service-worker.ts` |
+| FR-POS-05.1 | M | Selesai | `apps/api/services/supplier/application/commands/add_supplier.go` |
+| FR-POS-05.2 | M | Selesai | `apps/api/services/supplier/http.go` |
+| FR-POS-05.3 | M | Sebagian | `apps/api/services/supplier/application/commands/create_purchase_order.go` |
+| FR-POS-05.4 | S | Sebagian | `apps/api/services/supplier/http.go` |
+| FR-POS-05.5 | M | Sebagian | `apps/api/services/supplier/application/commands/receive_stock.go` |
+| FR-POS-05.6 | S | Belum | `apps/api/services/supplier/application/commands/receive_stock.go` |
+| FR-POS-05.7 | S | Sebagian | `apps/api/services/supplier/infrastructure/event_publisher.go` |
+| FR-POS-06.1 | M | Selesai | `apps/api/services/customer/application/commands/create_customer.go` |
+| FR-POS-06.2 | S | Sebagian | `apps/api/services/customer/http.go` |
+| FR-POS-06.3 | M | Belum | `apps/api/services/customer/application/commands/add_loyalty_points.go` |
+| FR-POS-06.4 | S | Belum | `apps/api/services/customer/application/commands/add_loyalty_points.go` |
+| FR-POS-06.5 | C | Sebagian | `apps/api/services/customer/infrastructure/event_publisher.go` |
+| FR-POS-06.6 | S | Belum | `apps/cashier/src/routes/(app)/pos/+page.svelte` |
+| FR-POS-07.1 | M | Sebagian | `apps/api/services/sales/infrastructure/postgres/sale_repository.go` |
+| FR-POS-07.2 | M | Sebagian | `apps/api/services/sales/infrastructure/postgres/sale_repository.go` |
+| FR-POS-07.3 | S | Belum | `apps/admin/src/routes/(app)/dashboard/+page.svelte` |
+| FR-POS-07.4 | M | Sebagian | `apps/admin/src/routes/(app)/dashboard/+page.svelte` |
+| FR-POS-07.5 | S | Belum | `apps/api/services/sales/infrastructure/postgres/sale_repository.go` |
+| FR-POS-07.6 | S | Sebagian | `apps/api/services/sales/http.go` |
+| FR-POS-SEC.1 | M | Selesai | `apps/api/internal/db/migrations/0041_sales_create_sales_schema.sql` |
+| FR-POS-SEC.2 | M | Sebagian | `apps/api/internal/db/migrations/0061_customer_schema.sql` |
+| FR-POS-SEC.3 | S | Belum | `stery-kit/go/pgtenant/pgtenant.go` |
+| FR-POS-SEC.4 | M | Pending Verification | `stery-kit/go/pgtenant/pgtenant.go` |
+| FR-POS-SEC.5 | M | Sebagian | `docs/adr/0001-single-module-go-api-on-sela-stack.md` |
+| FR-POS-SEC.6 | M | Sebagian | `ecosystem.config.cjs` |
+| FR-POS-SEC.7 | S | Belum | `apps/api/internal/db/migrations/0011_auth_schema.sql` |
+| FR-POS-SEC.8 | S | Belum | `apps/api/internal/db/migrations/0061_customer_schema.sql` |
+| FR-POS-SEC.9 | S | Selesai | `apps/api/cmd/api/routes.go` |
+| FR-POS-SEC.10 | S | Sebagian | `apps/admin/src/lib/server/session.ts` |
+
+Modul 08 NTF dan 09 AI tidak memiliki FR (Belum, lihat 4.08 dan 4.09).
+
+Ringkasan hitung status FR: 68 FR (13 + 7 + 7 + 12 + 7 + 6 + 6 + 10). Selesai 11, Sebagian 30, Belum 26, Pending Verification 1 (hitungan dari tabel di atas; bukan persentase kesiapan).
+
+### 11.2 Matriks BR -> FR
+
+Seluruh BR didefinisikan di `BRD_POS.id.md` bagian 6. Kolom NFR menunjuk kebutuhan non-fungsional pada bagian 9.
+
+| BR | FR terkait | NFR terkait | Catatan |
+|---|---|---|---|
+| BR-POS-01 | FR-POS-04.1, FR-POS-04.2, FR-POS-04.3, FR-POS-04.4, FR-POS-04.7, FR-POS-04.8, FR-POS-04.10 | NFR-POS-01, NFR-POS-04 | Alur 7.1 |
+| BR-POS-02 | FR-POS-SEC.1, FR-POS-SEC.2, FR-POS-SEC.3, FR-POS-SEC.4 | NFR-POS-05 | Gerbang G4, G6 |
+| BR-POS-03 | FR-POS-01.2, FR-POS-01.3, FR-POS-01.6, FR-POS-01.9 | - | Matriks 3.2 |
+| BR-POS-04 | FR-POS-02.1, FR-POS-02.2, FR-POS-02.3, FR-POS-02.4, FR-POS-02.5, FR-POS-02.6, FR-POS-02.7 | - | - |
+| BR-POS-05 | FR-POS-03.1, FR-POS-03.2, FR-POS-03.3, FR-POS-03.4, FR-POS-03.5, FR-POS-03.6, FR-POS-03.7 | NFR-POS-04 | - |
+| BR-POS-06 | FR-POS-05.1, FR-POS-05.2, FR-POS-05.3, FR-POS-05.4, FR-POS-05.5, FR-POS-05.6, FR-POS-05.7 | - | Alur 7.2 |
+| BR-POS-07 | FR-POS-06.1, FR-POS-06.2, FR-POS-06.3, FR-POS-06.4, FR-POS-06.6 | - | Gerbang G1 |
+| BR-POS-08 | FR-POS-07.1, FR-POS-07.2, FR-POS-07.3, FR-POS-07.4, FR-POS-07.5, FR-POS-07.6 | NFR-POS-13 | Gerbang G7 |
+| BR-POS-09 | FR-POS-04.5 | - | D-POS-01; gerbang G8 |
+| BR-POS-10 | FR-POS-04.7, FR-POS-04.8, FR-POS-04.10 | - | D-POS-02; gerbang G8 |
+| BR-POS-11 | FR-POS-04.12 | NFR-POS-10 | Alur 7.3; D-POS-03 |
+| BR-POS-12 | FR-POS-04.6, FR-POS-07.3 | - | D-POS-04 |
+| BR-POS-13 | FR-POS-SEC.5, FR-POS-SEC.6, FR-POS-SEC.7, FR-POS-SEC.10, FR-POS-01.5, FR-POS-01.7 | NFR-POS-08 | Gerbang G5 |
+| BR-POS-14 | FR-POS-SEC.4 | NFR-POS-06, NFR-POS-07 | Gerbang G3, G6 |
+| BR-POS-15 | FR-POS-01.10, FR-POS-01.11 | NFR-POS-09, NFR-POS-15 | Delta 2.7 |
+| BR-POS-16 | FR-POS-01.12, FR-POS-01.13 | NFR-POS-16 | Mode `suite` |
+| BR-POS-17 | FR-POS-03.5 | - | Modul 4.08 tanpa FR (Belum) |
+| BR-POS-18 | (tidak ada FR POS) | - | Modul 4.09 tanpa FR (Belum, PRD fase 2/3) |
+| BR-POS-19 | FR-POS-SEC.8 | NFR-POS-12 | D-POS-08 |
+| BR-POS-20 | (tidak ada FR POS) | - | Hipotesis INT-3, dispesifikasikan pada FSD Stery Suite 4.07; Ditunda |
+| BR-POS-21 | FR-POS-01.8 | - | D-POS-12 |
+
+### 11.3 Kontradiksi dokumen status vs kode
+
+**A. Kontradiksi dokumen terhadap kode** (kode = kebenaran; dokumen tidak diubah oleh pekerjaan ini).
+
+| # | Dokumen | Klaim | Kode menunjukkan | Bukti |
+|---|---|---|---|---|
+| K1 | `PRD.md` §10.1 | "Laravel gateway for auth and HTTP API" | Gateway Go `chi`; tidak ada direktori Laravel | `apps/api/cmd/api/routes.go` |
+| K2 | `PRD.md` §17 | autentikasi "JWT / Sanctum" di gateway | JWT RS256; tidak ada Sanctum | `apps/api/services/auth/infrastructure/jwt/signer.go` |
+| K3 | `PRD.md` §11.1 | `AuthService: Login, Validate` | 7 RPC (`Logout`, `Refresh`, `LogoutAll`, `ListSessions`, `ValidateStore` ditambahkan) | `docs/adr/0001-single-module-go-api-on-sela-stack.md` |
+| K4 | `PRD.md` §11.2 | `POST /api/ai/forecast-demand` ada | rute tidak ada; kode menambah rute pelanggan dan `PUT /api/products/{id}` | `apps/api/cmd/api/routes.go` |
+| K5 | `PRD.md` §13 | "Customer points updated only after successful sale" | tidak ditegakkan: `AddLoyaltyPoints` tidak memiliki pemanggil | `apps/api/services/customer/http.go` |
+| K6 | `PRD.md` §12.1 | tabel `notifications`, `ai_forecasts`, `permissions` wajib | tidak ada pada migrasi | `apps/api/internal/db/migrations/0011_auth_schema.sql` |
+| K7 | `PRD.md` §7.1 | pencarian produk berdasarkan nama, SKU, barcode | hanya nama (`ILIKE`) dan barcode persis | `apps/api/services/product/infrastructure/postgres/product_repository.go` |
+| K8 | `PRD.md` §14.3 | admin menerima notifikasi stok rendah | tidak ada konsumen peristiwa | `apps/api/services/inventory/infrastructure/publisher.go` |
+| K9 | `README.md` dan `CLAUDE.md` | empat lapis isolasi tenant, termasuk RLS cakupan toko | tidak ada kebijakan RLS yang memakai `app.store_id`; cakupan toko hanya lapisan aplikasi | `stery-kit/go/pgtenant/pgtenant.go` |
+| K10 | `docs/security/grpc-transport-security.md` | pod tanpa rahasia tidak dapat memanggil layanan backend mana pun | interseptor menerima permintaan tanpa header token, tanpa metadata, atau dengan rahasia kosong/`changeme` (gagal-terbuka) | `docs/adr/0001-single-module-go-api-on-sela-stack.md` |
+| K11 | komentar interseptor | rantai "recover -> otel -> metrics -> logging -> service-auth -> tenant-enforce" | hanya service-auth dan logging; tidak ada penegakan tenant pada gRPC | `docs/adr/0001-single-module-go-api-on-sela-stack.md` |
+| K12 | `README.md` | "structured logging via OpenTelemetry" | logging dulu zap; kini `log/slog`; kode OpenTelemetry/Prometheus tidak ada (ADR-0001) | `apps/api/cmd/api/main.go` |
+| K13 | `CLAUDE.md` | `make dev` menjalankan Postgres 16 | diselesaikan oleh ADR-0001/0002: `deploy/docker-compose.yml` kini menjalankan Dragonfly (tanpa nats, jaeger, prometheus) | `deploy/docker-compose.yml` |
+| K14 | `CLAUDE.md` dan `README.md` | tenant "di-seed lewat console command" | tidak ada kode atau seed yang membuat tenant, toko, atau pengguna | `apps/api/services/auth/infrastructure/postgres/user_repository.go` |
+| K15 | `CLAUDE.md` | bagian aplikasi SvelteKit menyebut "Laravel gateway" di `PUBLIC_GATEWAY_URL`, diagramnya sendiri Go chi | Go chi | `CLAUDE.md` |
+| K16 | `README.md` / `CLAUDE.md` | Go 1.22+ / pnpm | `go.work` 1.25.0, `Dockerfile.base` 1.25; ada `package-lock.json` (npm) | `go.work` |
+| K17 | `.github/workflows/ci.yml` | job "Laravel gateway tests" (php 8.3, composer, Pest, `apps/api-gateway`) | direktori `apps/api-gateway` tidak ada; gateway adalah Go | `.github/workflows/ci.yml` |
+| K18 | `.github/workflows/ci.yml` | Go `'1.24'`; pemicu `main`/`develop`; `npm --filter @pos-stery/admin check` | Go 1.25 (`Dockerfile.base`, `go.work`); cabang aktif `development`; `--filter` bergaya pnpm di bawah npm; tanpa `package.json` akar; tanpa e2e | `.github/workflows/ci.yml` |
+| K19 | `scripts/preflight.sh` | mensyaratkan PHP/Composer/pnpm dan Go 1.24+ | diselesaikan: skrip sudah tidak ada dan tumpukan tidak lagi memakai PHP/pnpm | `scripts/check.sh` |
+| K20 | komentar `AddLoyaltyPoints` | "called by sales-service after Sale.Completed" | tidak ada pemanggil | `apps/api/services/customer/http.go` |
+| K21 | `PRD.md` §18 vs rencana suite | rencana menyebut peramalan AI sebagai Phase 3 | `PRD.md` §18 menempatkan peramalan dan rekomendasi pada Phase 2; harga dinamis, citra, chat pada Phase 3 | `PRD.md` |
+| K22 | UI dashboard admin | menampilkan bauran pembayaran 55/30/15 dan sparkline sebagai data | angka disintesis dari `total_revenue`; backend tidak menyimpan metode pembayaran | `apps/admin/src/routes/(app)/dashboard/+page.svelte` |
+| K23 | UI kasir | `payment_method` Tunai/QRIS/Debit dipilih | gateway membuang `payment_method`; tidak ada kolom | `apps/api/services/sales/http.go` |
+
+**B. Koreksi atas klaim baseline yang dibaca ulang dari kode** (klaim dari pemindai [S] yang tidak sepenuhnya benar).
+
+| # | Klaim baseline [S] | Kode menunjukkan | Bukti |
+|---|---|---|---|
+| C1 | `scripts/migrate-validate.sh` tidak ada | skrip sudah tidak ada; `apps/api/internal/db/migrate_versions_test.go` hanya memeriksa bahwa versi migrasi unik | `apps/api/internal/db/migrate_versions_test.go` |
+| C2 | `keys/`, `.env`, `server.exe` dilacak git | tidak dilacak (diabaikan `.gitignore`), tetapi ada di disk kerja; yang dilacak hanya `ecosystem.config.cjs` dan tidak lagi memuat rahasia | `.gitignore` |
+| C3 | empat kebijakan RLS tanpa `WITH CHECK` | tujuh: `customer.loyalty_points`, `inventory.stock_thresholds`, `product.categories`, `sales.sale_items`, `sales.receipts`, `supplier.purchase_orders`, `supplier.purchase_order_items` | `apps/api/internal/db/migrations/0051_supplier_create_schema.sql` |
+| C4 | OpenTelemetry/Prometheus ada di POS | OpenTelemetry/Prometheus dihapus (ADR-0001); hanya `log/slog` | `apps/api/cmd/api/main.go` |
+| C5 | interseptor token layanan melindungi gRPC | gagal-terbuka (lihat K10) | `docs/adr/0001-single-module-go-api-on-sela-stack.md` |
+| C6 | sqlc dipakai di POS | hanya paket `auth`; paket lain pgx mentah | `apps/api/services/auth/sqlc.yaml` |
+| C7 | tes integrasi Postgres "tidak pernah dijalankan" | tidak ada sama sekali (target Makefile `test-integration` hanya mengatur variabel env) | `Makefile` |
+| C8 | `extractIPAddr` mengembalikan `0.0.0.0` (auth) | klaim milik HRIS, tidak berlaku untuk POS | `apps/api/services/auth/application/commands/login.go` |
+
+**C. Belum diverifikasi runtime** (Pending Verification, [INFERENCE] dari pembacaan statis): `SET LOCAL app.tenant_id = $1` dengan parameter terikat dan dua perintah (FR-POS-SEC.4); admin tanpa selektor toko menerima 403; struk kasir menampilkan nilai kosong; JWT kedaluwarsa tanpa refresh; balapan stok dan loyalitas.
+
+---
+
+## 12. Catatan Penutup
+
+- **Status dokumen.** Draft pertama; terbit bersama `BRD_POS.id.md`. Pembaruan: setiap perubahan kode POS wajib memperbarui bagian 4, 5, 6, dan 11 (kebiasaan FSD SELA, STACK-SPEC 18); versi dinaikkan dan kolom "Perubahan dari vX" diisi.
+- **Keputusan terbuka yang memblokir** (didefinisikan di BRD 9.3): D-POS-01 (PPN) dan D-POS-02 (struk) menutup gerbang G8; D-POS-03 (offline) menentukan alur 7.3; D-POS-04 (metode pembayaran) menentukan skema penjualan dan laporan; D-POS-05 (loyalitas) menentukan FR-POS-06.4; D-POS-08 (UU PDP) menentukan FR-POS-SEC.8; D-POS-09 (paket) menentukan batas `pos.stores.max` dan `pos.devices.max`; D-POS-10 (observabilitas); D-POS-11 (cookie/TTL sesi); D-POS-12 (pemasangan tenant); D-POS-13 (migrasi data).
+- **Hal yang tidak dijalankan.** Tidak ada build, lint, atau tes; angka (28 RPC, 14 rute, 79 fungsi tes, 15 kebijakan RLS, 7 tanpa `WITH CHECK`) berasal dari pembacaan dan penghitungan statis.
+- **Nilai bisnis.** Harga, SLA, kuota, target KPI, data kompetitor, dan angka kinerja seluruhnya `tbd`; tidak ada angka `Rp` dalam dokumen ini.
+- **Terjemahan.** Versi Inggris `FSD_POS.en.md` dibuat oleh lajur terjemahan dengan struktur identik; versi Indonesia ini adalah sumber kebenaran.

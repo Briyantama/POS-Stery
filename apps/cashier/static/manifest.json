@@ -1,0 +1,17 @@
+{
+  "name": "POS-Stery Cashier",
+  "short_name": "POS-Stery",
+  "description": "Point of Sale cashier terminal",
+  "start_url": "/pos",
+  "display": "standalone",
+  "background_color": "#f4f0e8",
+  "theme_color": "#11224f",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

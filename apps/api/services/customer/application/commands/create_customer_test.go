@@ -1,0 +1,122 @@
+package commands_test
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/Briyantama/POS-Stery/services/customer/application/commands"
+	"github.com/Briyantama/POS-Stery/services/customer/domain"
+	"uuid"
+)
+
+// ── stubs ──────────────────────────────────────────────────────────────────────
+
+type stubCustomerRepo struct {
+	createErr error
+}
+
+func (r *stubCustomerRepo) Create(_ context.Context, _ uuid.UUID, _ *domain.Customer) error {
+	return r.createErr
+}
+
+func (r *stubCustomerRepo) FindByID(_ context.Context, _, _ uuid.UUID) (*domain.Customer, error) {
+	return nil, nil
+}
+
+func (r *stubCustomerRepo) List(_ context.Context, _ uuid.UUID, _ string, _, _ int) ([]*domain.Customer, int, error) {
+	return nil, 0, nil
+}
+
+type stubCustomerPublisher struct {
+	calls int
+	err   error
+}
+
+func (p *stubCustomerPublisher) PublishCustomerNew(_ context.Context, _, _, _ string) error {
+	p.calls++
+	return p.err
+}
+
+// ── tests ──────────────────────────────────────────────────────────────────────
+
+func TestCreateCustomer_MissingTenantID(t *testing.T) {
+	cmd := commands.CreateCustomerCommand{TenantID: uuid.Nil(), Name: "Jane"}
+
+	_, err := commands.NewCreateCustomerHandler(&stubCustomerRepo{}, &stubCustomerPublisher{}).Handle(context.Background(), cmd)
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("want ErrInvalidArgument for nil tenant_id, got %v", err)
+	}
+}
+
+func TestCreateCustomer_MissingName(t *testing.T) {
+	cmd := commands.CreateCustomerCommand{TenantID: uuid.NewV7(), Name: ""}
+
+	_, err := commands.NewCreateCustomerHandler(&stubCustomerRepo{}, &stubCustomerPublisher{}).Handle(context.Background(), cmd)
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("want ErrInvalidArgument, got %v", err)
+	}
+}
+
+func TestCreateCustomer_RepoError(t *testing.T) {
+	repo := &stubCustomerRepo{createErr: errors.New("db down")}
+	cmd := commands.CreateCustomerCommand{TenantID: uuid.NewV7(), Name: "Jane Doe"}
+
+	_, err := commands.NewCreateCustomerHandler(repo, &stubCustomerPublisher{}).Handle(context.Background(), cmd)
+	if err == nil {
+		t.Fatal("want error when repo fails")
+	}
+}
+
+func TestCreateCustomer_PublishFailureIsNonFatal(t *testing.T) {
+	pub := &stubCustomerPublisher{err: errors.New("stream down")}
+	cmd := commands.CreateCustomerCommand{TenantID: uuid.NewV7(), Name: "Jane Doe", Email: "jane@example.com"}
+
+	c, err := commands.NewCreateCustomerHandler(&stubCustomerRepo{}, pub).Handle(context.Background(), cmd)
+	if err != nil {
+		t.Fatalf("publish failure must not propagate: %v", err)
+	}
+	if c == nil {
+		t.Fatal("expected customer on success")
+	}
+}
+
+func TestCreateCustomer_HappyPath(t *testing.T) {
+	pub := &stubCustomerPublisher{}
+	cmd := commands.CreateCustomerCommand{
+		TenantID: uuid.NewV7(),
+		Name:     "John Smith",
+		Phone:    "08111111111",
+		Email:    "john@example.com",
+	}
+
+	c, err := commands.NewCreateCustomerHandler(&stubCustomerRepo{}, pub).Handle(context.Background(), cmd)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if c.ID == uuid.Nil() {
+		t.Error("customer ID must be set")
+	}
+	if c.Name != cmd.Name {
+		t.Errorf("want name=%q, got %q", cmd.Name, c.Name)
+	}
+	if !c.IsActive {
+		t.Error("new customer must be active")
+	}
+	if pub.calls != 1 {
+		t.Errorf("want 1 publish call, got %d", pub.calls)
+	}
+}
+
+func TestCreateCustomer_RejectsBadEmailAndLongName(t *testing.T) {
+	for name, cmd := range map[string]commands.CreateCustomerCommand{
+		"bad email":     {TenantID: uuid.NewV7(), Name: "Jane", Email: "not-an-email"},
+		"display email": {TenantID: uuid.NewV7(), Name: "Jane", Email: "Jane <j@x.io>"},
+		"whitespace":    {TenantID: uuid.NewV7(), Name: "   "},
+		"name too long": {TenantID: uuid.NewV7(), Name: string(make([]byte, 201))},
+	} {
+		if _, err := commands.NewCreateCustomerHandler(&stubCustomerRepo{}, &stubCustomerPublisher{}).Handle(context.Background(), cmd); !errors.Is(err, domain.ErrInvalidArgument) {
+			t.Errorf("%s: err = %v, want ErrInvalidArgument", name, err)
+		}
+	}
+}

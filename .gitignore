@@ -1,0 +1,59 @@
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+bin/
+dist/
+
+# Node / SvelteKit
+node_modules/
+.svelte-kit/
+build/
+.output/
+.vercel/
+apps/admin/.svelte-kit/
+apps/admin/build/
+apps/cashier/.svelte-kit/
+apps/cashier/build/
+packages/ui/.svelte-kit/
+vite.config.ts.timestamp-*.mjs
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.env
+
+# JWT keys
+keys/
+*.pem
+*.key
+
+# IDE
+.idea/
+.vscode/settings.json
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Test output
+coverage/
+*.coverprofile
+.nyc_output/
+
+# Local API binary, pid and log
+.run/
+
+# Logs
+*.log
+logs/
+
+# Docker
+.docker/
+.claude/worktrees/

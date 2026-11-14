@@ -1,0 +1,71 @@
+package commands
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/Briyantama/POS-Stery/services/product/domain"
+	"uuid"
+)
+
+// CreateProductCommand carries the data required to create a new product.
+type CreateProductCommand struct {
+	TenantID    uuid.UUID
+	CategoryID  *uuid.UUID
+	Name        string
+	SKU         string
+	Barcode     string
+	BasePrice   float64
+	Description string
+	Unit        string
+}
+
+// CreateProductHandler handles the CreateProductCommand.
+type CreateProductHandler struct {
+	repo domain.ProductRepository
+}
+
+// NewCreateProductHandler constructs a handler with the given repository.
+func NewCreateProductHandler(repo domain.ProductRepository) *CreateProductHandler {
+	return &CreateProductHandler{repo: repo}
+}
+
+// Handle validates the command, constructs a Product aggregate and persists it.
+func (h *CreateProductHandler) Handle(ctx context.Context, cmd CreateProductCommand) (*domain.Product, error) {
+	cmd.Name, cmd.SKU = strings.TrimSpace(cmd.Name), strings.TrimSpace(cmd.SKU)
+	if cmd.TenantID == uuid.Nil() {
+		return nil, fmt.Errorf("tenant_id is required: %w", domain.ErrInvalidArgument)
+	}
+	if cmd.Name == "" {
+		return nil, fmt.Errorf("name is required: %w", domain.ErrInvalidArgument)
+	}
+	if cmd.SKU == "" {
+		return nil, fmt.Errorf("sku is required: %w", domain.ErrInvalidArgument)
+	}
+	if !validPrice(cmd.BasePrice) {
+		return nil, fmt.Errorf("base_price must be between 0 and 1e10: %w", domain.ErrInvalidArgument)
+	}
+	if err := ensureCategory(ctx, h.repo, cmd.TenantID, cmd.CategoryID); err != nil {
+		return nil, err
+	}
+
+	p := &domain.Product{
+		ID:          uuid.NewV7(),
+		TenantID:    cmd.TenantID,
+		CategoryID:  cmd.CategoryID,
+		Name:        cmd.Name,
+		SKU:         cmd.SKU,
+		Barcode:     cmd.Barcode,
+		BasePrice:   cmd.BasePrice,
+		Description: cmd.Description,
+		Unit:        cmd.Unit,
+		IsActive:    true,
+	}
+
+	if err := h.repo.Create(ctx, cmd.TenantID, p); err != nil {
+		return nil, fmt.Errorf("create product: %w", err)
+	}
+
+	return p, nil
+}

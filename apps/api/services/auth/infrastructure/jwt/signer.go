@@ -1,0 +1,106 @@
+package jwt
+
+import (
+	"context"
+	"crypto/rsa"
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/Briyantama/POS-Stery/services/auth/application"
+	"github.com/golang-jwt/jwt/v5"
+	"uuid"
+)
+
+const accessTokenTTL = 10 * time.Minute
+
+type posClaims struct {
+	jwt.RegisteredClaims
+	TenantID string `json:"tid"`
+	StoreID  string `json:"sid"`
+	Role     string `json:"role"`
+	Email    string `json:"email"`
+}
+
+type RSASigner struct {
+	privateKey *rsa.PrivateKey
+	publicKey  *rsa.PublicKey
+	blacklist  application.BlacklistStore
+}
+
+func NewRSASigner(privateKeyPath, publicKeyPath string, blacklist application.BlacklistStore) (*RSASigner, error) {
+	privBytes, err := os.ReadFile(privateKeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("read private key: %w", err)
+	}
+	privKey, err := jwt.ParseRSAPrivateKeyFromPEM(privBytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse private key: %w", err)
+	}
+
+	pubBytes, err := os.ReadFile(publicKeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("read public key: %w", err)
+	}
+	pubKey, err := jwt.ParseRSAPublicKeyFromPEM(pubBytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse public key: %w", err)
+	}
+
+	return &RSASigner{privateKey: privKey, publicKey: pubKey, blacklist: blacklist}, nil
+}
+
+func (s *RSASigner) Issue(claims application.TokenClaims) (string, time.Time, error) {
+	now := time.Now()
+	expiresAt := now.Add(accessTokenTTL)
+	jti := uuid.NewV4().String()
+	jwtClaims := posClaims{
+		ID:        jti,
+		Subject:   claims.UserID,
+		IssuedAt:  jwt.NewNumericDate(now),
+		ExpiresAt: jwt.NewNumericDate(expiresAt),
+		TenantID:  claims.TenantID,
+		StoreID:   claims.StoreID,
+		Role:      claims.Role,
+		Email:     claims.Email,
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwtClaims)
+	signed, err := token.SignedString(s.privateKey)
+	return signed, expiresAt, err
+}
+
+func (s *RSASigner) Verify(tokenStr string) (*application.TokenClaims, error) {
+	parsed, err := jwt.ParseWithClaims(tokenStr, &posClaims{}, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return s.publicKey, nil
+	}, jwt.WithValidMethods([]string{"RS256"}))
+	if err != nil {
+		return nil, err
+	}
+
+	c, ok := parsed.Claims.(*posClaims)
+	if !ok || !parsed.Valid {
+		return nil, fmt.Errorf("invalid token claims")
+	}
+
+	claims := &application.TokenClaims{
+		JTI:      c.ID,
+		UserID:   c.Subject,
+		TenantID: c.TenantID,
+		StoreID:  c.StoreID,
+		Role:     c.Role,
+		Email:    c.Email,
+	}
+	if c.ExpiresAt != nil {
+		claims.ExpiresAt = c.ExpiresAt.Time
+	}
+	return claims, nil
+}
+
+// Blacklist revokes the JTI (not the full token string) until expiresAt.
+func (s *RSASigner) Blacklist(ctx context.Context, jti string, expiresAt time.Time) error {
+	return s.blacklist.Blacklist(ctx, jti, expiresAt)
+}

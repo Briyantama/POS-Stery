@@ -1,0 +1,9 @@
+**
+!stery-kit/go/**
+!POS-Stery/apps/api/**
+**/*_test.go
+**/.env*
+**/keys
+**/*.pem
+**/node_modules
+**/.git

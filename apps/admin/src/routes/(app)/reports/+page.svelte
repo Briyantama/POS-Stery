@@ -1,0 +1,68 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { api, ApiError } from '$lib/api';
+  import { Alert, Button, Card, Input, PageHeader, StatCard, Table } from '@pos-stery/ui';
+
+  interface TopProduct { product_id: string; product_name: string; units_sold: number; revenue: number; }
+  interface Report { transaction_count: number; total_revenue: number; top_products: TopProduct[]; }
+
+  const localToday = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD, local time (not UTC)
+  let date    = $state(localToday());
+  let report: Report | null = $state(null);
+  let loading = $state(false);
+  let error   = $state('');
+
+  async function load() {
+    loading = true;
+    error   = '';
+    try {
+      report = await api.get<Report>(`/sales/report?date=${date}`);
+    } catch (err) {
+      error = err instanceof ApiError ? err.message : 'Failed to load report.';
+    } finally {
+      loading = false;
+    }
+  }
+
+  onMount(load);
+</script>
+
+<svelte:head><title>Reports — POS-Stery Admin</title></svelte:head>
+
+<PageHeader title="Sales Report">
+  <div class="toolbar">
+    <Input ariaLabel="Report date" type="date" bind:value={date} />
+    <Button onclick={load} {loading}>Load</Button>
+  </div>
+</PageHeader>
+
+{#if error}
+  <Alert>{error}</Alert>
+{:else if report}
+  <div class="stats-grid">
+    <StatCard title="Total Sales" value={report.transaction_count} />
+    <StatCard title="Total Revenue" value="IDR {report.total_revenue.toLocaleString('id-ID')}" />
+  </div>
+
+  <Card title="Top Products">
+    <Table
+      headers={['Product', 'Units Sold', 'Revenue']}
+      numeric={[1, 2]}
+      isEmpty={(report.top_products ?? []).length === 0}
+      empty="No data for this date."
+    >
+      {#each report.top_products ?? [] as p (p.product_id)}
+        <tr>
+          <td>{p.product_name}</td>
+          <td class="num">{p.units_sold}</td>
+          <td class="num">IDR {p.revenue.toLocaleString('id-ID')}</td>
+        </tr>
+      {/each}
+    </Table>
+  </Card>
+{/if}
+
+<style>
+  .toolbar    { display: flex; gap: var(--space-3, 0.75rem); align-items: flex-end; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-4, 1rem); margin-bottom: var(--space-6, 1.5rem); }
+</style>
