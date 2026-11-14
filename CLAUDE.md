@@ -9,7 +9,7 @@ Multi-tenant POS SaaS. `PRD.md` is the product spec; `docs/FSD_POS.en.md` is the
 ## Layout
 
 ```
-apps/api/                     one Go module github.com/Briyantama/POS-Stery (Go 1.25.1)
+apps/api/                     one Go module github.com/Briyantama/POS-Stery (Go 1.27.3)
   cmd/api/                    HTTP server: main.go (run(ctx, getenv)), routes.go (newMux)
   cmd/migrate/                goose up|down, reads DATABASE_URL
   internal/config/            Load(getenv) with fail-fast validation
