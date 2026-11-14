@@ -223,4 +223,24 @@
     padding: 2rem;
     overflow-y: auto;
   }
+
+  .sidebar__link:focus-visible,
+  .sidebar__store select:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgb(255 255 255 / 0.3);
+  }
+
+  /* ---- Narrow screens: sidebar becomes a top bar ---- */
+  @media (max-width: 768px) {
+    .shell { flex-direction: column; }
+    .sidebar {
+      width: auto;
+      height: auto;
+      position: static;
+      overflow-y: visible;
+    }
+    .sidebar__nav { flex-direction: row; flex-wrap: wrap; flex: none; }
+    .sidebar__link[aria-current="page"]::before { display: none; }
+    .content { padding: 1rem; }
+  }
 </style>

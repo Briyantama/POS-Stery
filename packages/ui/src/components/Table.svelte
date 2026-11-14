@@ -5,6 +5,8 @@
     empty?: string;
     isEmpty?: boolean;
     loading?: boolean;
+    /** Zero-based indexes of numeric columns: header right-aligned. Mark matching cells with class="num". */
+    numeric?: number[];
   }
   let {
     headers,
@@ -12,6 +14,7 @@
     empty = 'No records found.',
     isEmpty = false,
     loading = false,
+    numeric = [],
   }: Props = $props();
 </script>
 
@@ -19,8 +22,8 @@
   <table class="table">
     <thead>
       <tr>
-        {#each headers as header}
-          <th scope="col">{header}</th>
+        {#each headers as header, i}
+          <th scope="col" class:num={numeric.includes(i)}>{header}</th>
         {/each}
       </tr>
     </thead>
@@ -58,6 +61,8 @@
     text-align: left;
     border-bottom: 1px solid var(--color-border, #e2e8f0);
   }
+  .table th.num { text-align: right; }
+  .table :global(td.num) { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
   .table :global(tr:last-child td) { border-bottom: none; }
   .table :global(tr:hover td) { background: var(--color-surface-hover, #f8fafc); }
   .table__state {

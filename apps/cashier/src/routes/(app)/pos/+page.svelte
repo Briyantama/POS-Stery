@@ -38,6 +38,7 @@
   const subtotal = $derived(cart.reduce((s, i) => s + price(i) * i.quantity, 0));
   const total    = $derived(Math.max(0, subtotal - Number(discountAmount)));
   const change   = $derived(payMethod === 'Cash' ? Math.max(0, Number(cashTendered) - total) : 0);
+  const shortBy  = $derived(payMethod === 'Cash' ? Math.max(0, total - Number(cashTendered)) : 0);
 
   const QUICK_CASH = $derived([
     Math.ceil(total / 10_000) * 10_000,
@@ -53,16 +54,41 @@
   }
 
   /* ── Search ── */
+  let searchToken = 0;   // newest request wins; older responses are dropped
+  let debounceId: ReturnType<typeof setTimeout> | undefined;
+
+  function onSearchInput() {
+    clearTimeout(debounceId);
+    if (!searchQuery.trim()) { searchToken++; searchResults = []; searching = false; return; }
+    debounceId = setTimeout(searchProducts, 150);
+  }
+
   async function searchProducts() {
-    if (!searchQuery.trim()) { searchResults = []; return; }
+    const q = searchQuery.trim();
+    const token = ++searchToken;
+    if (!q) { searchResults = []; searching = false; return; }
     searching = true;
     try {
       const res = await api.get<{ items: Product[] }>(
-        `/products?q=${encodeURIComponent(searchQuery)}&per_page=10`
+        `/products?q=${encodeURIComponent(q)}&per_page=10`
       );
-      searchResults = res.items ?? [];
-    } catch { searchResults = []; }
-    finally { searching = false; }
+      if (token === searchToken) searchResults = res.items ?? [];
+    } catch {
+      if (token === searchToken) searchResults = [];
+    } finally {
+      if (token === searchToken) searching = false;
+    }
+  }
+
+  /* Enter adds the exact SKU match, else the first result (scanner-friendly). */
+  async function onSearchKeydown(e: KeyboardEvent) {
+    if (e.key !== 'Enter' || !searchQuery.trim()) return;
+    e.preventDefault();
+    clearTimeout(debounceId);
+    await searchProducts();
+    const q = searchQuery.trim().toLowerCase();
+    const hit = searchResults.find(p => p.sku.toLowerCase() === q) ?? searchResults[0];
+    if (hit) addToCart(hit);
   }
 
   function addToCart(product: Product) {
@@ -72,6 +98,9 @@
     } else {
       cart = [...cart, { ...product, quantity: 1 }];
     }
+    searchToken++;
+    clearTimeout(debounceId);
+    searching = false;
     searchQuery = '';
     searchResults = [];
   }
@@ -141,9 +170,11 @@
     <div class="panel-body">
       <div class="search-wrap">
         <Input
+          ariaLabel="Search products"
           placeholder="Search by name or SKU…"
           bind:value={searchQuery}
-          oninput={searchProducts}
+          oninput={onSearchInput}
+          onkeydown={onSearchKeydown}
         />
         {#if searching}<LoadingSpinner size="sm" />{/if}
       </div>
@@ -259,6 +290,7 @@
               class="method-btn"
               class:method-btn--active={payMethod === method}
               onclick={() => payMethod = method}
+              aria-pressed={payMethod === method}
             >{method}</button>
           {/each}
         </div>
@@ -281,9 +313,9 @@
                 {/each}
               </div>
             {/if}
-            <div class="change-row" class:change-row--due={Number(cashTendered) < total && Number(cashTendered) > 0}>
-              <span class="change-label">Change due</span>
-              <span class="change-amount">{fmtIDR(change)}</span>
+            <div class="change-row" class:change-row--due={shortBy > 0}>
+              <span class="change-label">{shortBy > 0 ? 'Short by' : 'Change due'}</span>
+              <span class="change-amount">{fmtIDR(shortBy > 0 ? shortBy : change)}</span>
             </div>
           </div>
         {:else}
@@ -474,11 +506,14 @@
   }
   .receipt-line__name { font-size: var(--text-sm, 0.875rem); font-weight: var(--weight-medium, 500); }
   .receipt-line__remove {
+    display: grid; place-items: center;
+    min-width: 2.5rem; min-height: 2.5rem; margin: -0.5rem -0.5rem -0.5rem 0;
     background: none; border: none; color: var(--color-muted, #7a7060); cursor: pointer;
-    font-size: var(--text-xs, 0.75rem); padding: 0.125rem 0.25rem; border-radius: var(--radius-sm);
+    font-size: var(--text-xs, 0.75rem); border-radius: var(--radius-sm);
     transition: color 140ms;
   }
   .receipt-line__remove:hover { color: var(--color-danger, #c0392b); }
+  .receipt-line__remove:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring-color); }
   .receipt-line__bottom { display: flex; align-items: center; gap: var(--space-3, 0.75rem); }
   .receipt-line__unit   { font-family: var(--font-mono); font-size: var(--text-xs, 0.75rem); color: var(--color-muted, #7a7060); font-variant-numeric: tabular-nums; }
   .receipt-line__amount { font-family: var(--font-mono); font-size: var(--text-sm, 0.875rem); font-weight: var(--weight-semibold, 600); margin-left: auto; font-variant-numeric: tabular-nums; }
@@ -486,7 +521,7 @@
   /* Qty stepper */
   .qty-stepper { display: flex; align-items: center; gap: var(--space-1, 0.25rem); }
   .qty-btn {
-    width: 1.625rem; height: 1.625rem;
+    width: 2.5rem; height: 2.5rem;
     border: 1px solid var(--color-border, #e2dbcd);
     border-radius: var(--radius-sm, 0.25rem);
     background: none; cursor: pointer; font-size: var(--text-sm, 0.875rem); line-height: 1;
@@ -495,7 +530,7 @@
   .qty-btn:hover  { background: var(--color-surface-hover, #eee8dc); }
   .qty-btn:active { transform: translateY(1px); }
   .qty-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ring-color); }
-  .qty-val { width: 1.5rem; text-align: center; font-family: var(--font-mono); font-weight: var(--weight-semibold, 600); font-size: var(--text-sm, 0.875rem); }
+  .qty-val { width: 2rem; text-align: center; font-family: var(--font-mono); font-weight: var(--weight-semibold, 600); font-size: var(--text-sm, 0.875rem); }
 
   /* ── Totals ── */
   .totals {
@@ -527,7 +562,8 @@
   .back-btn {
     background: none; border: none; cursor: pointer;
     color: var(--color-muted, #7a7060); font-size: var(--text-sm, 0.875rem);
-    padding: 0; transition: color 140ms;
+    min-height: 2.5rem; padding: 0 var(--space-2, 0.5rem); margin-left: calc(var(--space-2, 0.5rem) * -1);
+    transition: color 140ms;
   }
   .back-btn:hover { color: var(--color-text, #1a1611); }
   .back-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring-color); border-radius: var(--radius-sm); }
@@ -572,7 +608,9 @@
   /* Quick-cash chips */
   .quick-cash { display: flex; gap: var(--space-2, 0.5rem); flex-wrap: wrap; }
   .quick-chip {
-    padding: 0.375rem 0.75rem;
+    display: inline-flex; align-items: center;
+    min-height: 2.5rem;
+    padding: 0 0.75rem;
     border: 1px solid var(--color-border, #e2dbcd);
     border-radius: var(--radius-full, 9999px);
     background: var(--color-surface, #fff);
@@ -660,7 +698,9 @@
   .rct-tot-row dt { color: var(--color-muted, #7a7060); }
   .rct-tot-row dd { font-family: var(--font-mono); margin: 0; font-variant-numeric: tabular-nums; }
   .rct-tot-row--bold { font-size: var(--text-sm, 0.875rem); font-weight: var(--weight-bold, 700); border-top: 1px solid var(--color-border, #e2dbcd); padding-top: 0.5rem; margin-top: 0.25rem; }
-  .rct-tot-row--change dd { color: var(--color-success, #2e7d52); font-weight: var(--weight-semibold, 600); }
+  .rct-tot-row--change { align-items: baseline; border-top: 1px solid var(--color-border, #e2dbcd); padding-top: 0.5rem; margin-top: 0.25rem; }
+  .rct-tot-row--change dt { font-size: var(--text-sm, 0.875rem); font-weight: var(--weight-medium, 500); color: var(--color-success-fg, #1c5436); }
+  .rct-tot-row--change dd { font-size: var(--text-xl, 1.25rem); color: var(--color-success-fg, #1c5436); font-weight: var(--weight-bold, 700); }
 
   .rct-thanks { text-align: center; font-size: var(--text-xs, 0.75rem); color: var(--color-muted, #7a7060); margin: 0; letter-spacing: 0.05em; }
 </style>

@@ -50,11 +50,12 @@
   --color-surface-hover: #eee8dc;
   --color-border:        var(--border);
   --color-border-strong: var(--input);
+  --color-input-edge:    #8f8574; /* text-field boundary, 3:1 on white (WCAG 1.4.11) */
 
   /* ---- Text ---- */
   --color-text:        var(--foreground); /* warm ink */
   --color-muted:       var(--muted-foreground);
-  --color-placeholder: #a89e8b;
+  --color-placeholder: #7a7060;
   --color-on-primary:  var(--primary-foreground);
   --color-on-ink:      #f0ebe1; /* text on the ink sidebar/topbar */
 

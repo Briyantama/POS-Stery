@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api";
-  import { Alert, Badge, LoadingSpinner } from "@pos-stery/ui";
+  import { Alert, Badge, Button, LoadingSpinner } from "@pos-stery/ui";
 
   interface TopProduct {
     product_name: string;
@@ -21,9 +21,11 @@
   let error = $state("");
   let report = $state<Report | null>(null);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local time (not UTC)
 
-  onMount(async () => {
+  async function load() {
+    loading = true;
+    error = "";
     try {
       report = await api.get<Report>(
         `/sales/report?date=${today}`
@@ -33,7 +35,9 @@
     } finally {
       loading = false;
     }
-  });
+  }
+
+  onMount(load);
 
   function fmtIDR(n: number) {
     return "IDR " + n.toLocaleString("id-ID");
@@ -46,6 +50,7 @@
   <div class="center"><LoadingSpinner size="lg" /></div>
 {:else if error}
   <Alert>{error}</Alert>
+  <Button variant="secondary" onclick={load}>Retry</Button>
 {:else if report}
   <!-- ── Hero revenue panel ─────────────────────────────────────── -->
   <div class="hero-panel">
@@ -263,7 +268,7 @@
     color: var(--color-text, #1a1611);
   }
   .ops-entry--balance .ops-amount {
-    color: var(--color-muted, #7a7060);
+    color: var(--color-danger-fg, #8c2a20);
   }
   .ops-entry--ok .ops-amount {
     color: var(--color-success, #2e7d52);
@@ -324,7 +329,7 @@
     font-variant-numeric: tabular-nums;
   }
   .ledger-rank--gold {
-    color: var(--color-accent, #e0992e);
+    color: var(--color-warning-fg, #7a4b08);
     font-weight: var(--weight-bold, 700);
   }
 

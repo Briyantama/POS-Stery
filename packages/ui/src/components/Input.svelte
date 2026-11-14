@@ -8,8 +8,10 @@
     required?: boolean;
     disabled?: boolean;
     id?: string;
+    ariaLabel?: string;
     oninput?: (e: Event) => void;
     onchange?: (e: Event) => void;
+    onkeydown?: (e: KeyboardEvent) => void;
   }
   let {
     label,
@@ -20,8 +22,10 @@
     required = false,
     disabled = false,
     id,
+    ariaLabel,
     oninput,
     onchange,
+    onkeydown,
   }: Props = $props();
 
   const uid = $props.id();
@@ -40,9 +44,11 @@
     {required}
     {disabled}
     id={inputId}
+    aria-label={label ? undefined : ariaLabel}
     bind:value
     oninput={oninput}
     onchange={onchange}
+    onkeydown={onkeydown}
     aria-describedby={error ? `${inputId}-error` : undefined}
     aria-invalid={!!error}
     class="field__input"
@@ -57,7 +63,7 @@
   .field__label { font-size: var(--text-sm, 0.875rem); font-weight: var(--weight-medium, 500); color: var(--color-text, #1a1611); }
   .field__input {
     padding: 0.5rem 0.75rem;
-    border: 1px solid var(--color-border, #e2dbcd);
+    border: 1px solid var(--color-input-edge, #8f8574);
     border-radius: var(--radius-md, 0.375rem);
     font-size: var(--text-sm, 0.875rem);
     font-family: var(--font-sans);

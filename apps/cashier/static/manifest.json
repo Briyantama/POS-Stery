@@ -4,8 +4,8 @@
   "description": "Point of Sale cashier terminal",
   "start_url": "/pos",
   "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#2563eb",
+  "background_color": "#f4f0e8",
+  "theme_color": "#11224f",
   "orientation": "landscape",
   "icons": [
     {

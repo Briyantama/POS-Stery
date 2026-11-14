@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, ApiError } from '$lib/api';
-  import { Alert, Card, PageHeader, Table } from '@pos-stery/ui';
+  import { Alert, Button, Card, PageHeader, Table } from '@pos-stery/ui';
 
   interface Supplier { id: string; name: string; contact: string; phone: string; email: string; }
 
@@ -9,7 +9,9 @@
   let loading = $state(true);
   let error   = $state('');
 
-  onMount(async () => {
+  async function load() {
+    loading = true;
+    error = '';
     try {
       const res = await api.get<{ items: Supplier[] }>('/suppliers');
       suppliers = res.items ?? [];
@@ -18,7 +20,9 @@
     } finally {
       loading = false;
     }
-  });
+  }
+
+  onMount(load);
 </script>
 
 <svelte:head><title>Suppliers — POS-Stery Admin</title></svelte:head>
@@ -27,6 +31,7 @@
 
 {#if error}
   <Alert>{error}</Alert>
+  <Button variant="secondary" onclick={load}>Retry</Button>
 {:else}
   <Card>
     <Table

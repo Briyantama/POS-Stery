@@ -108,7 +108,8 @@
     background: rgb(255 255 255 / 0.1);
     border: 1px solid rgb(255 255 255 / 0.15);
     border-radius: var(--radius-md, 0.375rem);
-    padding: 0.375rem 0.875rem;
+    min-height: 2.5rem;
+    padding: 0 0.875rem;
     color: rgb(240 235 225 / 0.8);
     font-size: var(--text-sm, 0.875rem);
     cursor: pointer;
@@ -125,5 +126,10 @@
     flex: 1;
     min-height: 0;
     overflow: hidden;
+  }
+
+  /* Single-column POS page needs the shell to scroll */
+  @media (max-width: 768px) {
+    .content { overflow-y: auto; }
   }
 </style>

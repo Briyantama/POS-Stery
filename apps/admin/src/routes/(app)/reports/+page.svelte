@@ -6,7 +6,8 @@
   interface TopProduct { product_id: string; product_name: string; units_sold: number; revenue: number; }
   interface Report { transaction_count: number; total_revenue: number; top_products: TopProduct[]; }
 
-  let date    = $state(new Date().toISOString().slice(0, 10));
+  const localToday = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD, local time (not UTC)
+  let date    = $state(localToday());
   let report: Report | null = $state(null);
   let loading = $state(false);
   let error   = $state('');
@@ -30,7 +31,7 @@
 
 <PageHeader title="Sales Report">
   <div class="toolbar">
-    <Input type="date" bind:value={date} />
+    <Input ariaLabel="Report date" type="date" bind:value={date} />
     <Button onclick={load} {loading}>Load</Button>
   </div>
 </PageHeader>
@@ -40,20 +41,21 @@
 {:else if report}
   <div class="stats-grid">
     <StatCard title="Total Sales" value={report.transaction_count} />
-    <StatCard title="Total Revenue" value="IDR {report.total_revenue.toLocaleString()}" />
+    <StatCard title="Total Revenue" value="IDR {report.total_revenue.toLocaleString('id-ID')}" />
   </div>
 
   <Card title="Top Products">
     <Table
       headers={['Product', 'Units Sold', 'Revenue']}
+      numeric={[1, 2]}
       isEmpty={(report.top_products ?? []).length === 0}
       empty="No data for this date."
     >
       {#each report.top_products ?? [] as p (p.product_id)}
         <tr>
           <td>{p.product_name}</td>
-          <td>{p.units_sold}</td>
-          <td>IDR {p.revenue.toLocaleString()}</td>
+          <td class="num">{p.units_sold}</td>
+          <td class="num">IDR {p.revenue.toLocaleString('id-ID')}</td>
         </tr>
       {/each}
     </Table>

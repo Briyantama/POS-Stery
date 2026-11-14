@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, ApiError } from '$lib/api';
-  import { Alert, Card, Input, PageHeader, Table } from '@pos-stery/ui';
+  import { Alert, Button, Card, Input, PageHeader, Table } from '@pos-stery/ui';
 
   interface Customer { id: string; name: string; phone: string; email: string; loyalty_points: number; }
 
@@ -12,6 +12,7 @@
 
   async function load() {
     loading = true;
+    error = '';
     try {
       const res = await api.get<{ items: Customer[] }>(`/customers?q=${encodeURIComponent(search)}`);
       customers = res.items ?? [];
@@ -31,14 +32,16 @@
 
 <Card>
   <div class="toolbar">
-    <Input placeholder="Search customers…" bind:value={search} oninput={() => load()} />
+    <Input ariaLabel="Search customers" placeholder="Search customers…" bind:value={search} oninput={() => load()} />
   </div>
 
   {#if error}
     <Alert>{error}</Alert>
+    <Button variant="secondary" onclick={load}>Retry</Button>
   {:else}
     <Table
       headers={['Name', 'Phone', 'Email', 'Loyalty Points']}
+      numeric={[3]}
       {loading}
       isEmpty={customers.length === 0}
       empty="No customers found."
@@ -48,7 +51,7 @@
           <td>{c.name}</td>
           <td>{c.phone ?? '—'}</td>
           <td>{c.email ?? '—'}</td>
-          <td>{c.loyalty_points ?? 0}</td>
+          <td class="num">{c.loyalty_points ?? 0}</td>
         </tr>
       {/each}
     </Table>

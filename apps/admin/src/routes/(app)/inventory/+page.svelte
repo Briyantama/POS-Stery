@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, ApiError } from '$lib/api';
-  import { Alert, Badge, Card, PageHeader, Table } from '@pos-stery/ui';
+  import { Alert, Badge, Button, Card, PageHeader, Table } from '@pos-stery/ui';
 
   interface StockItem {
     product_id: string; product_name: string; quantity: number;
@@ -15,6 +15,7 @@
 
   async function load() {
     loading = true;
+    error = '';
     try {
       const qs = lowStockOnly ? '?low_stock_only=true' : '';
       const res = await api.get<{ items: StockItem[] }>(`/inventory${qs}`);
@@ -40,10 +41,12 @@
 
 {#if error}
   <Alert>{error}</Alert>
+  <Button variant="secondary" onclick={load}>Retry</Button>
 {:else}
   <Card>
     <Table
       headers={['Product', 'Stock', 'Min. Stock', 'Status']}
+      numeric={[1, 2]}
       {loading}
       isEmpty={items.length === 0}
       empty="No inventory records."
@@ -51,8 +54,8 @@
       {#each items as item (item.product_id)}
         <tr>
           <td>{item.product_name}</td>
-          <td>{item.quantity}</td>
-          <td>{item.min_quantity}</td>
+          <td class="num">{item.quantity}</td>
+          <td class="num">{item.min_quantity}</td>
           <td><Badge variant={item.is_low_stock ? 'warning' : 'success'}>{item.is_low_stock ? 'Low Stock' : 'OK'}</Badge></td>
         </tr>
       {/each}

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, ApiError } from '$lib/api';
-  import { Alert, Badge, Card, Input, PageHeader, Table } from '@pos-stery/ui';
+  import { Alert, Badge, Button, Card, Input, PageHeader, Table } from '@pos-stery/ui';
 
   interface Product {
     id: string; name: string; sku: string; base_price: number;
@@ -15,6 +15,7 @@
 
   async function load() {
     loading = true;
+    error = '';
     try {
       const res = await api.get<{ items: Product[] }>(`/products?q=${encodeURIComponent(search)}`);
       products = res.items ?? [];
@@ -34,14 +35,16 @@
 
 <Card>
   <div class="toolbar">
-    <Input placeholder="Search products…" bind:value={search} oninput={() => load()} />
+    <Input ariaLabel="Search products" placeholder="Search products…" bind:value={search} oninput={() => load()} />
   </div>
 
   {#if error}
     <Alert>{error}</Alert>
+    <Button variant="secondary" onclick={load}>Retry</Button>
   {:else}
     <Table
       headers={['SKU', 'Name', 'Base Price', 'Sale Price', 'Status']}
+      numeric={[2, 3]}
       {loading}
       isEmpty={products.length === 0}
       empty="No products found."
@@ -50,8 +53,8 @@
         <tr>
           <td>{p.sku}</td>
           <td>{p.name}</td>
-          <td>IDR {p.base_price.toLocaleString()}</td>
-          <td>{p.sale_price == null ? '-' : `IDR ${p.sale_price.toLocaleString()}`}</td>
+          <td class="num">IDR {p.base_price.toLocaleString('id-ID')}</td>
+          <td class="num">{p.sale_price == null ? '-' : `IDR ${p.sale_price.toLocaleString('id-ID')}`}</td>
           <td><Badge variant={p.is_active ? 'success' : 'default'}>{p.is_active ? 'Active' : 'Inactive'}</Badge></td>
         </tr>
       {/each}
