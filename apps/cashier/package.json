@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "lint": "prettier --check --write . && eslint ."
+    "lint": "prettier --check --write . && oxlint src && eslint ."
   },
   "engines": {
     "node": ">=20.19"
@@ -22,6 +22,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-svelte": "^3.24.1",
     "globals": "^17.14.0",
+    "oxlint": "^1.92",
     "prettier": "^3.8.4",
     "svelte": "^5.56.1",
     "svelte-check": "^4.6.0",
