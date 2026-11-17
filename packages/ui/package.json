@@ -1,0 +1,30 @@
+{
+  "name": "@pos-stery/ui",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "svelte": "./src/index.ts",
+      "default": "./dist/index.js"
+    },
+    "./tokens.css": "./src/tokens.css"
+  },
+  "scripts": {
+    "build": "svelte-package -i src",
+    "dev": "svelte-package -i src --watch",
+    "check": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "devDependencies": {
+    "@sveltejs/package": "^2.5.7",
+    "svelte": "^5.56.1",
+    "svelte-check": "^4.6.0",
+    "typescript": "^6.0.3"
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  }
+}

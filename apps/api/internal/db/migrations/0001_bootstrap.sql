@@ -1,0 +1,25 @@
+-- +goose Up
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE SCHEMA IF NOT EXISTS product;
+CREATE SCHEMA IF NOT EXISTS inventory;
+CREATE SCHEMA IF NOT EXISTS sales;
+CREATE SCHEMA IF NOT EXISTS supplier;
+CREATE SCHEMA IF NOT EXISTS customer;
+
+-- +goose StatementBegin
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'pos_app') THEN
+        CREATE ROLE pos_app NOLOGIN;
+    END IF;
+END
+$$;
+-- +goose StatementEnd
+
+-- +goose Down
+DROP SCHEMA IF EXISTS customer;
+DROP SCHEMA IF EXISTS supplier;
+DROP SCHEMA IF EXISTS sales;
+DROP SCHEMA IF EXISTS inventory;
+DROP SCHEMA IF EXISTS product;
+DROP SCHEMA IF EXISTS auth;

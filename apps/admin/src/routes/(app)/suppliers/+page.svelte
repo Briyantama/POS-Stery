@@ -1,0 +1,53 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { api, ApiError } from '$lib/api';
+  import { Alert, Button, Card, PageHeader, Table } from '@pos-stery/ui';
+
+  interface Supplier { id: string; name: string; contact: string; phone: string; email: string; }
+
+  let suppliers: Supplier[] = $state([]);
+  let loading = $state(true);
+  let error   = $state('');
+
+  async function load() {
+    loading = true;
+    error = '';
+    try {
+      const res = await api.get<{ items: Supplier[] }>('/suppliers');
+      suppliers = res.items ?? [];
+    } catch (err) {
+      error = err instanceof ApiError ? err.message : 'Failed to load suppliers.';
+    } finally {
+      loading = false;
+    }
+  }
+
+  onMount(load);
+</script>
+
+<svelte:head><title>Suppliers — POS-Stery Admin</title></svelte:head>
+
+<PageHeader title="Suppliers" />
+
+{#if error}
+  <Alert>{error}</Alert>
+  <Button variant="secondary" onclick={load}>Retry</Button>
+{:else}
+  <Card>
+    <Table
+      headers={['Name', 'Contact', 'Phone', 'Email']}
+      {loading}
+      isEmpty={suppliers.length === 0}
+      empty="No suppliers yet."
+    >
+      {#each suppliers as s (s.id)}
+        <tr>
+          <td>{s.name}</td>
+          <td>{s.contact}</td>
+          <td>{s.phone}</td>
+          <td>{s.email}</td>
+        </tr>
+      {/each}
+    </Table>
+  </Card>
+{/if}

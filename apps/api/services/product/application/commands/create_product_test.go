@@ -1,0 +1,190 @@
+package commands_test
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/Briyantama/POS-Stery/services/product/application/commands"
+	"github.com/Briyantama/POS-Stery/services/product/domain"
+	"uuid"
+)
+
+// ── stubs ──────────────────────────────────────────────────────────────────────
+
+type stubProductRepo struct {
+	createErr       error
+	foreignCategory bool // CategoryExists reports false (category owned by another tenant)
+	existing        *domain.Product
+	writes          int
+}
+
+func (r *stubProductRepo) Create(_ context.Context, _ uuid.UUID, _ *domain.Product) error {
+	r.writes++
+	return r.createErr
+}
+
+func (r *stubProductRepo) Update(_ context.Context, _ uuid.UUID, _ *domain.Product) error {
+	r.writes++
+	return nil
+}
+
+func (r *stubProductRepo) FindByID(_ context.Context, _, _ uuid.UUID) (*domain.Product, error) {
+	return r.existing, nil
+}
+
+func (r *stubProductRepo) CategoryExists(_ context.Context, _, _ uuid.UUID) (bool, error) {
+	return !r.foreignCategory, nil
+}
+
+func (r *stubProductRepo) Search(_ context.Context, _ uuid.UUID, _, _ string, _, _ int) ([]*domain.Product, int, error) {
+	return nil, 0, nil
+}
+
+// ── helpers ────────────────────────────────────────────────────────────────────
+
+func validCreateProductCmd() commands.CreateProductCommand {
+	return commands.CreateProductCommand{
+		TenantID:  uuid.NewV7(),
+		Name:      "Widget A",
+		SKU:       "WGT-001",
+		BasePrice: 9.99,
+	}
+}
+
+// ── tests ──────────────────────────────────────────────────────────────────────
+
+func TestCreateProduct_MissingTenantID(t *testing.T) {
+	cmd := validCreateProductCmd()
+	cmd.TenantID = uuid.Nil()
+
+	_, err := commands.NewCreateProductHandler(&stubProductRepo{}).Handle(context.Background(), cmd)
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("want ErrInvalidArgument for nil tenant_id, got %v", err)
+	}
+}
+
+func TestCreateProduct_MissingName(t *testing.T) {
+	cmd := validCreateProductCmd()
+	cmd.Name = ""
+
+	_, err := commands.NewCreateProductHandler(&stubProductRepo{}).Handle(context.Background(), cmd)
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("want ErrInvalidArgument for missing name, got %v", err)
+	}
+}
+
+func TestCreateProduct_MissingSKU(t *testing.T) {
+	cmd := validCreateProductCmd()
+	cmd.SKU = ""
+
+	_, err := commands.NewCreateProductHandler(&stubProductRepo{}).Handle(context.Background(), cmd)
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("want ErrInvalidArgument for missing SKU, got %v", err)
+	}
+}
+
+func TestCreateProduct_NegativeBasePrice(t *testing.T) {
+	cmd := validCreateProductCmd()
+	cmd.BasePrice = -1.0
+
+	_, err := commands.NewCreateProductHandler(&stubProductRepo{}).Handle(context.Background(), cmd)
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("want ErrInvalidArgument for negative base_price, got %v", err)
+	}
+}
+
+func TestCreateProduct_DuplicateSKU(t *testing.T) {
+	repo := &stubProductRepo{createErr: domain.ErrAlreadyExists}
+	cmd := validCreateProductCmd()
+
+	_, err := commands.NewCreateProductHandler(repo).Handle(context.Background(), cmd)
+	if !errors.Is(err, domain.ErrAlreadyExists) {
+		t.Fatalf("want ErrAlreadyExists for duplicate SKU, got %v", err)
+	}
+}
+
+func TestCreateProduct_CategoryOfOtherTenant(t *testing.T) {
+	repo := &stubProductRepo{foreignCategory: true}
+	cmd := validCreateProductCmd()
+	catID := uuid.NewV7()
+	cmd.CategoryID = &catID
+
+	_, err := commands.NewCreateProductHandler(repo).Handle(context.Background(), cmd)
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("want ErrInvalidArgument for foreign category, got %v", err)
+	}
+	if repo.writes != 0 {
+		t.Fatal("product must not be written")
+	}
+}
+
+func TestUpdateProduct_CategoryOfOtherTenant(t *testing.T) {
+	tenant := uuid.NewV7()
+	repo := &stubProductRepo{foreignCategory: true, existing: &domain.Product{ID: uuid.NewV7(), TenantID: tenant}}
+	catID := uuid.NewV7()
+
+	_, err := commands.NewUpdateProductHandler(repo).Handle(context.Background(), commands.UpdateProductCommand{
+		TenantID: tenant, ProductID: repo.existing.ID, CategoryID: &catID, Name: "Widget",
+	})
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("want ErrInvalidArgument for foreign category, got %v", err)
+	}
+	if repo.writes != 0 {
+		t.Fatal("product must not be written")
+	}
+}
+
+func TestCreateProduct_HappyPath(t *testing.T) {
+	cmd := validCreateProductCmd()
+	catID := uuid.NewV7()
+	cmd.CategoryID = &catID
+	cmd.Barcode = "123456789"
+	cmd.Description = "A fine widget"
+	cmd.Unit = "each"
+
+	p, err := commands.NewCreateProductHandler(&stubProductRepo{}).Handle(context.Background(), cmd)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p == nil {
+		t.Fatal("expected product, got nil")
+	}
+	if p.ID == uuid.Nil() {
+		t.Error("product ID must be set")
+	}
+	if p.Name != cmd.Name {
+		t.Errorf("want name=%q, got %q", cmd.Name, p.Name)
+	}
+	if p.SKU != cmd.SKU {
+		t.Errorf("want SKU=%q, got %q", cmd.SKU, p.SKU)
+	}
+	if !p.IsActive {
+		t.Error("new product must be active")
+	}
+}
+
+func TestCreateProduct_RejectsBlankAndOutOfRange(t *testing.T) {
+	for name, mut := range map[string]func(*commands.CreateProductCommand){
+		"blank name":    func(c *commands.CreateProductCommand) { c.Name = "   " },
+		"blank sku":     func(c *commands.CreateProductCommand) { c.SKU = " " },
+		"price too big": func(c *commands.CreateProductCommand) { c.BasePrice = 1e12 },
+	} {
+		cmd := validCreateProductCmd()
+		mut(&cmd)
+		repo := &stubProductRepo{}
+		if _, err := commands.NewCreateProductHandler(repo).Handle(context.Background(), cmd); !errors.Is(err, domain.ErrInvalidArgument) || repo.writes != 0 {
+			t.Errorf("%s: err = %v, writes = %d; want ErrInvalidArgument, 0", name, err, repo.writes)
+		}
+	}
+}
+
+func TestUpdateProduct_OmittedIsActiveKeepsValue(t *testing.T) {
+	repo := &stubProductRepo{existing: &domain.Product{IsActive: true}}
+	p, err := commands.NewUpdateProductHandler(repo).Handle(context.Background(), commands.UpdateProductCommand{
+		TenantID: uuid.NewV7(), ProductID: uuid.NewV7(), Name: "n", BasePrice: 1,
+	})
+	if err != nil || !p.IsActive {
+		t.Fatalf("IsActive = %v, err = %v; want still active", p != nil && p.IsActive, err)
+	}
+}
